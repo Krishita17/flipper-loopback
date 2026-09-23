@@ -1,0 +1,6 @@
+id: ir_sirc_01_15
+subsystem: infrared
+description: SIRC address 0x01 command 0x15 via `ir tx`, decoded by `ir rx`.
+stimulus: { kind: message, protocol: SIRC, address: "0x01", command: "0x15", bursts: 3 }
+expected: { subsystem: infrared, protocol: SIRC, payload: "01-15" }
+tags: [regression]

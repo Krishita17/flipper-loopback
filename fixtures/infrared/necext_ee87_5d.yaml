@@ -1,0 +1,6 @@
+id: ir_necext_ee87_5d
+subsystem: infrared
+description: NECext address 0x87EE command 0x5D via `ir tx`, decoded by `ir rx`.
+stimulus: { kind: message, protocol: NECext, address: "0x87EE", command: "0x5D", bursts: 3 }
+expected: { subsystem: infrared, protocol: NECext, payload: "87EE-5D" }
+tags: [regression]

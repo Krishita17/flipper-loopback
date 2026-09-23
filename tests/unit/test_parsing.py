@@ -9,10 +9,18 @@ from pathlib import Path
 
 import pytest
 
-from flci.cli import parse_device_info, parse_subghz_decodes
+from flci.cli import (
+    parse_device_info,
+    parse_gpio_read,
+    parse_ir_decodes,
+    parse_key_lines,
+    parse_nfc_mfu_info,
+    parse_subghz_decodes,
+)
 from flci.devices import PortInfo, RoleConfigError, resolve_roles
 from flci.fixtures import FixtureError, load_fixture, load_fixtures
-from flci.schema import NormalizedDecode, normalize_hex
+from flci.schema import NormalizedDecode, normalize_hex, normalize_payload
+from flci.subsystems import REGISTRY
 from flci.transport import SerialTransport
 
 RX_OUTPUT = (
@@ -84,11 +92,52 @@ def test_transport_clean_strips_echo_and_prompt() -> None:
     assert SerialTransport._clean(raw, "device_info") == "hardware_name : X"
 
 
-def test_shipped_fixtures_load() -> None:
-    fixtures = load_fixtures("subghz")
-    assert fixtures, "no Sub-GHz fixtures found"
+@pytest.mark.parametrize("subsystem", sorted(REGISTRY))
+def test_shipped_fixtures_load(subsystem: str) -> None:
+    fixtures = load_fixtures(subsystem)
+    assert fixtures, f"no {subsystem} fixtures found"
+    sub = REGISTRY[subsystem]()
     for f in fixtures:
-        assert f.stimulus_path is not None and f.stimulus_path.is_file()
+        sub.kind(f)  # every fixture uses a stimulus kind its subsystem understands
+        if f.stimulus_path is not None:
+            assert f.stimulus_path.is_file()
+
+
+def test_parse_ir() -> None:
+    text = "NEC, A:0x04, C:0x08\r\nNEC, A:0x04, C:0x08 R\r\nRAW, 3 samples:\r\n1 2 3\r\n"
+    decodes = parse_ir_decodes(text)
+    assert [d.payload for d in decodes] == ["4-8", "4-8"]
+    assert decodes[1].raw["repeat"] is True
+    expected = NormalizedDecode(subsystem="infrared", protocol="NEC", payload="04-08")
+    assert expected.matches(decodes[0])
+
+
+def test_parse_key_lines() -> None:
+    text = "Reading iButton...\r\nPress Ctrl+C to abort\r\nDallas 0123456789ABCDE9\r\n"
+    [d] = parse_key_lines(text, "ibutton")
+    assert (d.protocol, d.payload, d.bits) == ("Dallas", "0123456789ABCDE9", 64)
+    rf = "Reading RFID...\r\nPress Ctrl+C to abort\r\nEM4100 DC69660F12\r\nFC: 220\r\n"
+    [r] = parse_key_lines(rf + "Reading stopped\r\n", "rfid")
+    assert (r.protocol, r.payload) == ("EM4100", "DC69660F12")
+
+
+def test_parse_gpio() -> None:
+    d = parse_gpio_read("Pin PA7 <= 1")
+    assert d is not None and d.payload == "1" and d.raw["pin"] == "PA7"
+    assert parse_gpio_read("Err: pin PA7 is not set as an input.") is None
+
+
+def test_parse_nfc_mfu_info() -> None:
+    text = (
+        "\r\n\tTag information\r\nType: NTAG213\r\nVendor ID: 4, NXP\r\n"
+        "Tech: ISO 14443-3 (NFC-A)\nUID: 04 10 20 30 40 50 60\nATQA: 00 44\nSAK: 00\r\n"
+    )
+    [d] = parse_nfc_mfu_info(text)
+    assert (d.protocol, d.payload) == ("NTAG213", "04102030405060")
+
+
+def test_normalize_payload_multi_field() -> None:
+    assert normalize_payload("0x0004-0x08") == "4-8"
 
 
 def test_corrupted_fixture_fails_loudly(tmp_path: Path) -> None:

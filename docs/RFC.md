@@ -1,40 +1,61 @@
 # RFC: Automated hardware-in-the-loop (HIL) regression testing for firmware
 
-> **Draft.** This will be posted to flipperdevices/flipperzero-firmware after the Phase 1 bench run produces real numbers. Check every claim below before posting.
+> Ready to post to flipperdevices/flipperzero-firmware **once one bench run has produced real numbers**. Before posting, replace the `TBD` cells in *Evidence*.
 
 ## Summary
-This RFC proposes a community-maintained hardware-in-the-loop test rig that automates the manual integration test cases in `documentation/testing/integration_tests.md`. It uses two devices on opposite sides of a physical air gap. One sends a known stimulus. The other runs the candidate firmware (stock CLI only), receives the stimulus and decodes it. A host runner checks that the decode matches a versioned fixture and writes JUnit XML for CI.
+This RFC proposes a community-maintained hardware-in-the-loop test rig that automates the physical-layer cases in `documentation/testing/integration_tests.md`. Two devices sit on opposite sides of an air gap (or a wire). A counterpart sends a known stimulus, and the DUT, running the candidate firmware with its stock CLI only, decodes it. A host runner checks the decode against a versioned fixture and writes JUnit XML for CI.
+
+Reference implementation: https://github.com/Krishita17/flipper-loopback
 
 ## Motivation
-The integration test cases are run by hand today. The firmware roadmap requires changes to pass them and asks the community for help with regression testing. The physical-layer tests have no automation because radio/IR/NFC behavior can't be mocked in software. With a second physical device on the other side of the air gap, those tests can be scripted and still check the same thing.
+Those integration cases are run by hand today. Radio, IR, NFC and RFID behavior can't be mocked in software, which is why there is no automation layer for them. With a second physical device on the other side of the air gap, the cases can be scripted and still check the same behavior.
 
 ## Proposal
-- **Two-device loopback**: a counterpart (a second Flipper, or an ESP32/PN532) sends; the DUT decodes; the host checks the result. The DUT runs STOCK firmware and is driven only through the existing USB serial CLI, with no special test build.
-- **Fixtures**: each case is a stimulus file (`.sub`/`.ir`/`.nfc`) plus a YAML file with the expected normalized decode, versioned next to the tests.
-- **Output**: JUnit XML, shown as a PR status check from a self-hosted bench runner.
-- **Jig**: a 3D-printed mount keeps the two devices at a fixed spacing so RF/IR results don't vary between runs.
+- **Two-device loopback, stock DUT.** The DUT is driven only through the existing USB serial CLI. It needs no special build and no extra firmware code.
+- **Fixtures as data.** Each case is a YAML file of the expected normalized decode, sometimes with a stimulus file (`.sub`, `.nfc`). Adding a case needs no code.
+- **Every CLI dependency lives in one module**, with a source reference for each command. This also gives maintainers a list of which CLI output formats the community relies on.
+- **CI.** A self-hosted bench runner shows JUnit results as a PR check. It can flash the DUT from a build's update package using `update install` (no DFU/SWD), and firmware forks can call it as a reusable workflow.
+- **Jig.** A parametric 3D-printed mount keeps the spacing fixed so RF/IR results don't vary between runs.
 
 ## Scope
-| Subsystem | Fit | Notes |
-|-----------|-----|-------|
-| Sub-GHz, Infrared, iButton, RFID 125kHz, GPIO/UART | Strong | wired or clean RF/IR round trip |
-| NFC 13.56MHz, BadUSB | Partial | emulation/HID coverage is uneven |
-| Screen / UI | Manual | needs camera + CV; out of scope for v1 |
+| Subsystem | Fit | Mechanism |
+|-----------|-----|-----------|
+| Sub-GHz | strong | `subghz tx` / `tx_from_file` → `subghz rx` |
+| Infrared | strong | `ir tx` → `ir rx` |
+| iButton | strong | `ikey emulate` → `ikey read` (wired 1-Wire) |
+| RFID 125 kHz | strong | `rfid emulate` → `rfid read` |
+| GPIO | strong | `gpio set` → `gpio read` (wired) |
+| NFC 13.56 MHz | partial | `emulate -f` → `mfu info`; NTAG/Ultralight type + UID only |
+| BadUSB | partial | host captures HID; a human presses OK/Back (the app replaces CDC with HID) |
+| Screen / UI | manual | out of scope |
+
+## Evidence
+| Subsystem | Fixtures | Runs | Pass | Flaky | Firmware |
+|---|---:|---:|---:|---:|---|
+| Sub-GHz | 4 | TBD | TBD | TBD | TBD |
+| Infrared | 5 | TBD | TBD | TBD | TBD |
+| RFID | 2 | TBD | TBD | TBD | TBD |
+| iButton | 2 | TBD | TBD | TBD | TBD |
+| GPIO | 2 | TBD | TBD | TBD | TBD |
+| NFC | 1 | TBD | TBD | TBD | TBD |
 
 ## Non-goals
 - Replacing manual UI and feel testing.
-- Defeating any security system. The rig only checks decode correctness, on hardware the tester owns.
+- Defeating any security system. The rig checks decode correctness on hardware the tester owns, with synthetic keys.
 
 ## Prior art
-Existing serial harnesses drive a single Flipper to test their own tooling. As far as I know, none does a two-device physical loopback against the firmware's own integration test cases.
+Existing serial harnesses drive a single Flipper to test their own tooling. As far as I know, none does a two-device physical loopback against the firmware's own integration cases.
 
 ## Open questions for maintainers
-1. Would you want to adopt or endorse an automated HIL suite upstream?
+1. Would you want to adopt or endorse an automated HIL suite, in-tree or as a linked project?
 2. Is anyone already working on this?
-3. Are the current `subghz` / `ir` / `ikey` CLI commands stable enough to build assertions on, or would you prefer a documented test-oriented CLI surface?
-4. Would you accept a self-hosted runner integration, and under what constraints?
+3. Are the `subghz` / `ir` / `ikey` / `rfid` / `nfc` CLI output formats stable enough to assert on? Would you consider a machine-readable output mode (e.g. `--json`) for receivers?
+4. BadUSB: would a CLI or RPC way to start and stop a Bad USB script without switching the USB interface be acceptable? It would make that subsystem fully automatable.
+5. Would you accept a self-hosted runner integration, and under what constraints (fork policy, who hosts the bench)?
 
 ## Rollout
-Phase 1 walking skeleton (one Sub-GHz round trip passing) → RF/IR/iButton → CI integration + jig → RFID and partial NFC/BadUSB. I'm happy to start with a proof-of-concept PR if there's interest.
+1. Publish bench numbers (above) from at least one rig.
+2. Maintainers pick: link from docs, or move the fixtures in-tree next to `integration_tests.md`.
+3. Optional: a nightly run on a maintainer-hosted bench against `dev`.
 
-Reference implementation: https://github.com/Krishita17/flipper-loopback
+I'm happy to start with a proof-of-concept PR, or to adapt the harness to whatever structure you prefer.

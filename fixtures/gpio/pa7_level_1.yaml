@@ -1,0 +1,6 @@
+id: gpio_pa7_level_1
+subsystem: gpio
+description: Emitter drives PA7 (header pin 2) high; DUT reads its PA7 through a 1 kOhm series resistor.
+stimulus: { kind: level, out_pin: PA7, in_pin: PA7, level: 1 }
+expected: { subsystem: gpio, protocol: level, bits: 1, payload: "1" }
+tags: [smoke, wired]

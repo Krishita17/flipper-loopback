@@ -1,0 +1,6 @@
+id: rfid_h10301
+subsystem: rfid
+description: "HID H10301 26-bit, 3 data bytes (facility + card number)."
+stimulus: { kind: emulate, protocol: H10301, data: "ED8770", read_mode: normal, read_timeout_s: 10 }
+expected: { subsystem: rfid, protocol: H10301, bits: 24, payload: "ED8770" }
+tags: [regression]

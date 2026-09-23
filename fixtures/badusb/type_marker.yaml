@@ -1,0 +1,9 @@
+id: badusb_type_marker
+subsystem: badusb
+description: >
+  PARTIAL, operator-assisted. DUT types a marker string as a HID keyboard (ID 1234:5678);
+  the Linux host captures it via evdev. An operator presses OK, then Back, on the DUT.
+stimulus: { kind: script, hid_id: "1234:5678", operator_timeout_s: 60 }
+stimulus_path: type_marker.txt
+expected: { subsystem: badusb, protocol: keystrokes, payload: "666C63692D6C6F6F706261636B2D6F6B20313233" }
+tags: [partial, operator]

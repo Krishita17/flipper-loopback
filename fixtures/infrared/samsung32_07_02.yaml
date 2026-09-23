@@ -1,0 +1,6 @@
+id: ir_samsung32_07_02
+subsystem: infrared
+description: Samsung32 address 0x07 command 0x02 via `ir tx`, decoded by `ir rx`.
+stimulus: { kind: message, protocol: Samsung32, address: "0x07", command: "0x02", bursts: 3 }
+expected: { subsystem: infrared, protocol: Samsung32, payload: "07-02" }
+tags: [regression]

@@ -1,0 +1,9 @@
+id: nfc_ntag213
+subsystem: nfc
+description: >
+  PARTIAL. Blank NTAG213 with UID 04 10 20 30 40 50 60 (BCC0 BC, BCC1 40), emulated from an
+  uploaded .nfc file; DUT runs `mfu info` and we assert tag type + UID only.
+stimulus: { kind: emulate_file, read_timeout_s: 10 }
+stimulus_path: ntag213_04102030405060.nfc
+expected: { subsystem: nfc, protocol: NTAG213, bits: 56, payload: "04102030405060" }
+tags: [partial, regression]

@@ -28,6 +28,17 @@ def normalize_hex(value: str | int, bits: int | None = None) -> str:
     return format(n, "X").zfill(width)
 
 
+def normalize_payload(value: str, bits: int | None = None) -> str:
+    """Payloads may have several hex fields joined by ``-`` (e.g. IR ``address-command``).
+
+    Each field is normalised on its own; ``bits`` only applies to single-field payloads.
+    """
+    parts = value.split("-")
+    if len(parts) == 1:
+        return normalize_hex(value, bits)
+    return "-".join(normalize_hex(p) for p in parts)
+
+
 class NormalizedDecode(BaseModel):
     """What a receiver decoded, in a shape two decodes can be compared in."""
 
@@ -59,7 +70,9 @@ class NormalizedDecode(BaseModel):
             and self.frequency_hz != other.frequency_hz
         ):
             return False
-        return normalize_hex(self.payload, self.bits) == normalize_hex(other.payload, other.bits)
+        return normalize_payload(self.payload, self.bits) == normalize_payload(
+            other.payload, other.bits
+        )
 
     def short(self) -> str:
         freq = f" @{self.frequency_hz}Hz" if self.frequency_hz else ""

@@ -1,0 +1,6 @@
+id: ir_nec_04_08
+subsystem: infrared
+description: NEC address 0x04 command 0x08 via `ir tx`, decoded by `ir rx`.
+stimulus: { kind: message, protocol: NEC, address: "0x04", command: "0x08", bursts: 3 }
+expected: { subsystem: infrared, protocol: NEC, payload: "04-08" }
+tags: [smoke]

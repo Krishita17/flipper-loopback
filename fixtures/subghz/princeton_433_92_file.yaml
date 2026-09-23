@@ -1,0 +1,7 @@
+id: princeton_433_92_file
+subsystem: subghz
+description: Same signal as princeton_433_92, sent via `subghz tx_from_file` after uploading the .sub.
+stimulus: { kind: file, frequency_hz: 433920000, bursts: 3 }
+stimulus_path: princeton_433_92.sub
+expected: { subsystem: subghz, protocol: Princeton, frequency_hz: 433920000, bits: 24, payload: "123456" }
+tags: [regression, file-tx]

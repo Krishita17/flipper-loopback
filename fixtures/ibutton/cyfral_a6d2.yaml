@@ -1,0 +1,6 @@
+id: ibutton_cyfral_a6d2
+subsystem: ibutton
+description: Cyfral 2-byte key, emulated and read over the wired 1-Wire line.
+stimulus: { kind: emulate, key_type: Cyfral, key_data: "A6D2", read_timeout_s: 10 }
+expected: { subsystem: ibutton, protocol: Cyfral, bits: 16, payload: "A6D2" }
+tags: [regression, wired]

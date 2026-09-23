@@ -1,34 +1,50 @@
 # Architecture
 
 ```
-tests/test_subghz_loopback.py
-        │  parametrized over fixtures/subghz/*.yaml
+tests/test_<subsystem>_loopback.py   parametrized over fixtures/<subsystem>/*.yaml
+        │  capability gate (FLCI_CAPABILITIES) → skip, never fake-pass
         ▼
 flci.rig.Rig.round_trip(fixture)
-        │  reset both → subsystem.arm(DUT) → subsystem.emit(emitter) → subsystem.collect(DUT)
+        │  reset both → prepare (uploads) → exchange → cleanup (always)
         ▼
-flci.subsystems.<name>          one class per subsystem (Subsystem ABC)
+flci.subsystems.<name>        ReceiverFirst:  arm(DUT) → emit(emitter) → collect(DUT)
+                              EmitterFirst:   start_emit → read(DUT, bounded) → stop_emit
+                              custom:         GPIO (wired), BadUSB (host HID)
         ▼
-flci.cli.FlipperCLI             every firmware command string + output parser
+flci.cli.FlipperCLI           every firmware command string + output parser
         ▼
-flci.transport.SerialTransport  bytes, prompt detection, Ctrl+C, timeouts
+flci.transport.SerialTransport   bytes, `>: ` prompt, Ctrl+C, run / run_bounded / stream / payload
         ▼
 USB CDC serial → stock Flipper firmware CLI
 ```
 
 | Module | Responsibility | Knows firmware strings? |
 |---|---|---|
-| `transport.py` | open/reset/run/stream, `>: ` prompt, ANSI stripping, timeouts | only the prompt |
-| `cli.py` | typed verbs + parsers (`device_info`, `subghz tx/rx`) | **yes, only here** |
+| `transport.py` | open/reset/run/stream/upload, prompt detection, ANSI stripping, timeouts | only the prompt |
+| `cli.py` | typed verbs + pure parsers for every subsystem | **yes, only here** |
 | `devices.py` | USB discovery (VID 0483 / PID 5740), explicit roles | no |
-| `schema.py` | `NormalizedDecode`, `Fixture`, hex normalisation | no |
+| `schema.py` | `NormalizedDecode`, `Fixture`, payload normalisation | no |
 | `fixtures.py` | YAML loading + validation, loud errors | no |
-| `subsystems/` | arm / emit / collect per subsystem | no |
+| `subsystems/` | how each subsystem crosses the gap | no |
+| `hostio/hid_capture.py` | host-side HID keyboard capture (BadUSB) | no |
 | `rig.py` | orchestration + `RoundTripResult.explain()` | no |
+
+## Payload normalisation
+
+| Subsystem | `protocol` | `payload` |
+|---|---|---|
+| subghz | decoder name (`Princeton`, `CAME`) | key hex, padded to `bits` |
+| infrared | `NEC`, `RC5`, ... | `<address>-<command>`, each unpadded hex |
+| ibutton / rfid | `Dallas`, `EM4100`, ... | data bytes hex |
+| nfc | tag type (`NTAG213`) | UID hex |
+| gpio | `level` | `0` / `1` |
+| badusb | `keystrokes` | UTF-8 hex of captured text |
 
 ## Design decisions
 
 - **Stock DUT.** The DUT only ever receives CLI commands. It never runs a test build.
-- **Explicit roles.** With two identical Flippers, guessing which is the DUT would silently test the wrong firmware. The runner skips until `FLCI_DUT` / `FLCI_EMITTER` are set.
-- **Parameter stimulus in Phase 1.** `subghz tx` has Princeton 24-bit built in, so the emitter needs no SD card files. Fixtures also carry an equivalent `.sub` file for Phase 2's `tx_from_file`.
-- **Match any packet.** The emitter repeats 10 times. The test passes if any decoded packet equals the expected decode, and every packet is reported.
+- **Explicit roles.** With two identical Flippers, guessing which is the DUT would silently test the wrong firmware.
+- **Bench capabilities.** Wired and operator subsystems are opt-in, so an unwired bench skips those tests instead of failing them.
+- **Upload with verification.** `storage write_chunk` appends, so the harness removes the file first and checks MD5 afterwards.
+- **Match any packet.** Emitters repeat. A test passes if any decoded packet equals the expectation, and every packet is reported.
+- **Offline tests are labelled.** `tests/unit/fake_flipper.py` simulates the CLI wire protocol to test orchestration. It never counts as a hardware result.

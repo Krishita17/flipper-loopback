@@ -1,0 +1,6 @@
+id: princeton_433_92_alt
+subsystem: subghz
+description: Second Princeton key with different bits set, so a stuck or cached decode can't pass.
+stimulus: { kind: princeton_tx, key: "0xA5F00F", frequency_hz: 433920000, te_us: 350, repeat: 10 }
+expected: { subsystem: subghz, protocol: Princeton, frequency_hz: 433920000, bits: 24, payload: "A5F00F" }
+tags: [regression]

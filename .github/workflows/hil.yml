@@ -1,0 +1,108 @@
+# Hardware-in-the-loop suite on a SELF-HOSTED bench runner (two Flippers on USB).
+#
+# Runner setup: docs/CI.md. The runner must have the labels [self-hosted, flipper-hil]
+# and these repository/environment variables set:
+#   FLCI_DUT, FLCI_EMITTER   port paths or device names
+#   FLCI_CAPABILITIES        what this bench is wired for, e.g. "subghz,infrared,rfid,nfc,gpio"
+#
+# SECURITY: never run untrusted code on a self-hosted runner. Fork PRs are excluded below;
+# maintainers can run a fork's branch manually via workflow_dispatch after reviewing it.
+name: HIL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      firmware_url:
+        description: "Optional URL of a firmware update .tgz to flash onto the DUT first"
+        required: false
+      tags:
+        description: "Optional fixture tags to run (comma list, e.g. smoke)"
+        required: false
+  # Lets a firmware repo call this bench after it builds an update package.
+  workflow_call:
+    inputs:
+      firmware_artifact:
+        description: "Name of an uploaded artifact containing an f7-update-* package"
+        type: string
+        required: false
+      tags:
+        type: string
+        required: false
+
+concurrency:
+  group: flipper-hil-bench # one physical bench, one job at a time
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  hil:
+    # Only once a bench is configured (FLCI_DUT set), so no job sits queued forever.
+    # Then: same-repo PRs with the "hil" label, pushes to main, or manual/called runs.
+    if: >-
+      vars.FLCI_DUT != '' &&
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(github.event.pull_request.labels.*.name, 'hil')))
+    runs-on: [self-hosted, flipper-hil]
+    timeout-minutes: 45
+    env:
+      FLCI_DUT: ${{ vars.FLCI_DUT }}
+      FLCI_EMITTER: ${{ vars.FLCI_EMITTER }}
+      FLCI_CAPABILITIES: ${{ vars.FLCI_CAPABILITIES }}
+      FLCI_TAGS: ${{ inputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python env
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -q -e '.[dev]'
+
+      - name: Detect bench
+        run: .venv/bin/python scripts/detect_devices.py
+
+      - name: Fetch firmware (URL)
+        if: inputs.firmware_url != ''
+        env:
+          FW_URL: ${{ inputs.firmware_url }}
+        run: |
+          mkdir -p fw && curl -fsSL "$FW_URL" -o fw/update.tgz
+
+      - name: Fetch firmware (artifact)
+        if: inputs.firmware_artifact != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.firmware_artifact }}
+          path: fw
+
+      - name: Flash DUT
+        if: inputs.firmware_url != '' || inputs.firmware_artifact != ''
+        run: |
+          pkg=$(ls -d fw/*.tgz fw/f7-update-* 2>/dev/null | head -n1)
+          .venv/bin/python scripts/flash_dut.py "$pkg"
+
+      - name: HIL suite
+        run: .venv/bin/pytest -m hardware -v -rs --junitxml=reports/hil-junit.xml
+
+      - name: Publish results as a check
+        if: always()
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: reports/hil-junit.xml
+          check_name: HIL results
+          include_passed: true
+          detailed_summary: true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hil-junit
+          path: reports/

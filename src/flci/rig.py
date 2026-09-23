@@ -43,19 +43,21 @@ class Rig:
 
     def reset(self) -> None:
         """Explicit clean state on both sides before every test."""
-        self.emitter.transport.reset()
-        self.dut.transport.reset()
+        for dev in (self.emitter, self.dut):
+            if dev.transport.is_open:
+                dev.cli.nfc_exit()
+                dev.transport.reset()
 
     def round_trip(self, fixture: Fixture) -> RoundTripResult:
         sub = REGISTRY[fixture.subsystem]()
         self.reset()
+        sub.prepare(self.emitter.cli, self.dut.cli, fixture)
         start = time.monotonic()
-        sub.arm(self.dut.cli, fixture)
         try:
-            sub.emit(self.emitter.cli, fixture)
+            ex = sub.exchange(self.emitter.cli, self.dut.cli, fixture)
         finally:
-            # Always stop the DUT receiver, even if TX blew up, so the next test starts clean.
-            decodes, raw = sub.collect(self.dut.cli, fixture)
+            sub.cleanup(self.emitter.cli, self.dut.cli)
+        decodes, raw = ex.decodes, ex.dut_output
         passed = any(d.matches(fixture.expected) for d in decodes)
         result = RoundTripResult(
             fixture_id=fixture.id,
@@ -66,6 +68,7 @@ class Rig:
             duration_s=time.monotonic() - start,
             emitter_fw=self.emitter.firmware,
             dut_fw=self.dut.firmware,
+            notes=ex.notes,
         )
         log.info(result.explain())
         return result

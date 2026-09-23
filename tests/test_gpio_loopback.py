@@ -1,4 +1,4 @@
-"""Sub-GHz: emitter transmits, DUT decodes over the air."""
+"""GPIO: emitter drives a pin, DUT reads the wired pin."""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ from flci.rig import Rig
 from flci.schema import Fixture
 
 
-@pytest.mark.parametrize("fixture", fixture_params("subghz"))
-def test_subghz_round_trip(rig: Rig, fixture: Fixture, record_property: object) -> None:
+@pytest.mark.parametrize("fixture", fixture_params("gpio"))
+def test_gpio_round_trip(rig: Rig, fixture: Fixture, record_property: object) -> None:
     run_round_trip(rig, fixture, record_property)

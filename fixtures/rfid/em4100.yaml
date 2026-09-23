@@ -1,0 +1,6 @@
+id: rfid_em4100
+subsystem: rfid
+description: EM4100 (EM-Marin) 5-byte ID, emulated by the emitter, read by the DUT back to back.
+stimulus: { kind: emulate, protocol: EM4100, data: "DC69660F12", read_mode: normal, read_timeout_s: 10 }
+expected: { subsystem: rfid, protocol: EM4100, bits: 40, payload: "DC69660F12" }
+tags: [smoke, regression]

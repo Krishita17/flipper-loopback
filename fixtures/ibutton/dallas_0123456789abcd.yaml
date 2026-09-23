@@ -1,0 +1,8 @@
+id: ibutton_dallas_ds1990
+subsystem: ibutton
+description: >
+  DS1990-style Dallas key. Family 0x01, serial 23..CD, valid CRC8 (E9); readers reject a bad CRC.
+  Wired: pin 17 (1-Wire) <-> pin 17, GND <-> GND.
+stimulus: { kind: emulate, key_type: Dallas, key_data: "0123456789ABCDE9", read_timeout_s: 10 }
+expected: { subsystem: ibutton, protocol: Dallas, bits: 64, payload: "0123456789ABCDE9" }
+tags: [smoke, regression, wired]

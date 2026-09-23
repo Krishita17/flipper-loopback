@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flipper-loopback"
-version = "0.1.0"
+version = "0.4.0"
 description = "Hardware-in-the-loop regression harness for Flipper Zero firmware: two devices, one air gap, pass/fail."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,6 +25,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+badusb = ["evdev>=1.7; sys_platform == 'linux'"]
 dev = ["pytest>=8", "ruff>=0.5", "black>=24", "mypy>=1.10", "types-PyYAML", "types-pyserial"]
 
 [project.urls]
@@ -35,10 +36,18 @@ packages = ["src/flci"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 addopts = "-ra --junitxml=reports/junit.xml"
 markers = [
   "hardware: needs two Flippers on USB (skipped otherwise)",
   "subghz: Sub-GHz loopback tests",
+  "infrared: Infrared loopback tests",
+  "ibutton: iButton loopback tests (wired)",
+  "rfid: RFID 125 kHz loopback tests",
+  "nfc: NFC loopback tests (partial)",
+  "gpio: GPIO loopback tests (wired)",
+  "badusb: BadUSB tests (partial, operator-assisted)",
+  "partial: subsystem with known, documented coverage gaps",
 ]
 
 [tool.ruff]
@@ -56,3 +65,7 @@ line-length = 100
 python_version = "3.11"
 strict = true
 files = ["src/flci"]
+
+[[tool.mypy.overrides]]
+module = ["evdev"]
+ignore_missing_imports = true

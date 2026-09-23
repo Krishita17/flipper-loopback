@@ -27,3 +27,20 @@ jobs:
         with:
           name: junit-${{ matrix.python-version }}
           path: reports/junit.xml
+
+  jig:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -q && sudo apt-get install -y -q openscad
+      - name: Render STL for both jig modes
+        run: |
+          mkdir -p stl
+          for mode in back_to_back head_to_head; do
+            openscad -D "mode=\"$mode\"" -o "stl/flipper_jig_$mode.stl" hardware/jig/flipper_jig.scad
+          done
+          ls -l stl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jig-stl
+          path: stl/
