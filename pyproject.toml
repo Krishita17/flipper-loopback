@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flipper-loopback"
+version = "0.1.0"
+description = "Hardware-in-the-loop regression harness for Flipper Zero firmware: two devices, one air gap, pass/fail."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Krishita Sanjay Choksi" }]
+keywords = ["flipper-zero", "hardware-in-the-loop", "hil", "sub-ghz", "pytest", "firmware-testing"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Framework :: Pytest",
+  "Topic :: Software Development :: Testing",
+  "Topic :: System :: Hardware",
+  "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+  "pyserial>=3.5",
+  "pydantic>=2.6",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5", "black>=24", "mypy>=1.10", "types-PyYAML", "types-pyserial"]
+
+[project.urls]
+Homepage = "https://github.com/Krishita17/flipper-loopback"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flci"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --junitxml=reports/junit.xml"
+markers = [
+  "hardware: needs two Flippers on USB (skipped otherwise)",
+  "subghz: Sub-GHz loopback tests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.black]
+target-version = ["py311"]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/flci"]

@@ -1,0 +1,20 @@
+id: princeton_433_92
+subsystem: subghz
+description: >
+  Princeton 24-bit at 433.92 MHz, sent with the stock `subghz tx` command.
+  The smallest possible end-to-end loop: one known key across the air gap.
+stimulus:
+  kind: princeton_tx
+  key: "0x123456"
+  frequency_hz: 433920000
+  te_us: 400
+  repeat: 10
+# Same signal as a key file, for file-based TX in Phase 2.
+stimulus_path: princeton_433_92.sub
+expected:
+  subsystem: subghz
+  protocol: Princeton
+  frequency_hz: 433920000
+  bits: 24
+  payload: "123456"
+tags: [smoke, regression]
