@@ -13,6 +13,7 @@ from flci.subsystems.base import Exchange, Subsystem, as_int
 
 class Gpio(Subsystem):
     name = "gpio"
+    required_commands = ("gpio",)
     kinds = ("level",)
 
     def exchange(self, emitter: FlipperCLI, dut: FlipperCLI, fixture: Fixture) -> Exchange:

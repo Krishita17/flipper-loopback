@@ -10,6 +10,8 @@ labels: bench-report
 **Jig mode and spacing** (or "none" + distance):
 **FLCI_CAPABILITIES:**
 
+<!-- Easiest: run `flci soak --runs 20` and paste reports/soak.md here instead of the table. -->
+
 | Subsystem | Runs | Pass | Fail | Flaky (passed on rerun) |
 |---|---:|---:|---:|---:|
 | subghz | | | | |

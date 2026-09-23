@@ -13,6 +13,7 @@ from collections.abc import Iterator
 import pytest
 
 from flci.devices import Device, DeviceRole, RoleConfigError, find_flipper_ports, resolve_roles
+from flci.errors import FlciEnvironmentSkip
 from flci.fixtures import load_fixtures
 from flci.rig import Rig
 from flci.schema import Fixture
@@ -76,8 +77,16 @@ def run_round_trip(rig: Rig, fixture: Fixture, record_property: object) -> None:
     if fixture.subsystem not in capabilities():
         hint = OPT_IN.get(fixture.subsystem, "add it to FLCI_CAPABILITIES")
         pytest.skip(f"bench not set up for {fixture.subsystem}: {hint}")
-    result = rig.round_trip(fixture)
+    try:
+        result = rig.round_trip(fixture)
+    except FlciEnvironmentSkip as e:
+        if os.environ.get("FLCI_STRICT") == "1":
+            raise
+        pytest.skip(f"environment: {e}")
     if callable(record_property):
+        for role, pct in result.battery.items():
+            if pct is not None:
+                record_property(f"{role}_battery_pct", pct)
         record_property("dut_firmware", result.dut_fw)
         record_property("emitter_firmware", result.emitter_fw)
         record_property("decodes", "; ".join(d.short() for d in result.decodes))

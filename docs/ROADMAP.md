@@ -13,13 +13,13 @@ All four phases are implemented in code. **None of it has been validated on a ph
 - [x] Sub-GHz: built-in Princeton TX **and** file TX (`.sub` upload + MD5 check + `tx_from_file`)
 - [x] Infrared: `ir tx` → `ir rx` (NEC, NECext, Samsung32, RC5, SIRC fixtures)
 - [x] iButton: `ikey emulate` → `ikey read` over wired 1-Wire (Dallas w/ valid CRC, Cyfral)
-- [x] `scripts/record_fixture.py`: from `.sub`, from `.ir`, or live capture
+- [x] `flci record`: from `.sub`, from `.ir`, or live capture
 - [x] Adding a fixture needs no code; corrupted fixtures fail loudly (unit-tested)
 - [ ] *bench* Flakiness numbers per subsystem (fill in the table below)
 
 ## Phase 3: CI integration
 - [x] `hil.yml`: self-hosted runner, bench mutex, fork-PR guard, JUnit → check run
-- [x] `scripts/flash_dut.py`: flash DUT from an update package via `update install`
+- [x] `flci flash`: flash DUT from an update package via `update install`
 - [x] Reusable via `workflow_call` so a firmware fork can run this bench after its build
 - [x] Parametric jig (`hardware/jig/flipper_jig.scad`), STL rendered in CI; wiring guide
 - [ ] *bench* Test-print the jig; confirm run-to-run repeatability
@@ -31,6 +31,21 @@ All four phases are implemented in code. **None of it has been validated on a ph
 - [x] BadUSB (**partial**, operator-assisted): host HID capture via evdev
 - [x] [RFC](RFC.md) ready to post
 - [ ] *bench* Replace the estimates below with measured numbers, then post the RFC
+
+## Since v0.4
+- [x] `flci` CLI (`detect`, `fixtures`, `soak`, `report`, `compare`, `record`, `flash`)
+- [x] Soak mode: per-fixture pass rate, p50/p95, distinct decodes, RFC evidence rows
+- [x] Baseline comparison (regressed / fixed / coverage lost), wired into `hil.yml`
+- [x] Preflight via `help`: a missing CLI command or a region lock is a *skip with reason*
+- [x] Battery level recorded per result (`info power` → `charge.level`)
+- [x] Fixtures: Nice FLO, Linear (decoder display quirk), RC6, Pioneer, RCA, Indala26 (PSK), IoProxXSF
+
+## Next
+- [ ] *bench* First soak run; fill the nondeterminism table and the RFC evidence table
+- [ ] Machine-readable receiver output upstream (see RFC question 3) to replace regex parsing
+- [ ] Emitter alternatives: ESP32 + CC1101 for Sub-GHz, PN532 for NFC readers
+- [ ] NFC: MIFARE Classic / ISO14443-4A reads once a CLI read path is confirmed
+- [ ] Per-fixture timing budgets (fail on decode-time regressions, not just wrong decodes)
 
 ## Coverage matrix
 
@@ -53,7 +68,8 @@ All four phases are implemented in code. **None of it has been validated on a ph
 | Sub-GHz RX tail | last packet may still be decoding when TX returns | `TAIL_S = 0.5`; pass if any of N repeats matches | no |
 | IR | angle/ambient light | jig `head_to_head`, 3 bursts | no |
 | RFID/NFC/iButton read | reader may never see the key | one-shot read with hard timeout, then Ctrl+C | no |
-| Serial port | qFlipper or a monitor holding the port | `detect_devices.py` reports the open error | n/a |
+| Serial port | qFlipper or a monitor holding the port | `flci detect` reports the open error | n/a |
+| Battery | low charge shortens RF/RFID range | charge level recorded per result; compare against failures | no |
 | Fixed sleeps | every wait is `FlipperCLI.settle()`, greppable | tune from bench data | no |
 
-No retries are in place. If one gets added, it will be logged in the test output and justified in this table.
+Measure these with `flci soak --runs 20`. No retries are in place. If one gets added, it will be logged in the test output and justified in this table.

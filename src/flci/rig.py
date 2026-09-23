@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass, field
 
 from flci.devices import Device
+from flci.errors import FlciUnsupported
 from flci.schema import Fixture, NormalizedDecode
 from flci.subsystems import REGISTRY
 
@@ -24,6 +25,7 @@ class RoundTripResult:
     emitter_fw: str
     dut_fw: str
     notes: list[str] = field(default_factory=list)
+    battery: dict[str, int | None] = field(default_factory=dict)
 
     def explain(self) -> str:
         got = "\n    ".join(d.short() for d in self.decodes) or "<no decodes>"
@@ -48,8 +50,20 @@ class Rig:
                 dev.cli.nfc_exit()
                 dev.transport.reset()
 
+    def preflight(self, required: tuple[str, ...]) -> None:
+        """Fail fast (as a skip) if either firmware lacks a CLI command we need."""
+        for dev in (self.emitter, self.dut):
+            if not dev.commands:  # `help` unparsable: don't block, the command will tell us
+                continue
+            missing = [c for c in required if c not in dev.commands]
+            if missing:
+                raise FlciUnsupported(
+                    f"{dev.role.value} firmware {dev.firmware} has no CLI command(s) {missing}"
+                )
+
     def round_trip(self, fixture: Fixture) -> RoundTripResult:
         sub = REGISTRY[fixture.subsystem]()
+        self.preflight(sub.required_commands)
         self.reset()
         sub.prepare(self.emitter.cli, self.dut.cli, fixture)
         start = time.monotonic()
@@ -69,6 +83,10 @@ class Rig:
             emitter_fw=self.emitter.firmware,
             dut_fw=self.dut.firmware,
             notes=ex.notes,
+            battery={
+                "emitter": self.emitter.battery_percent(),
+                "dut": self.dut.battery_percent(),
+            },
         )
         log.info(result.explain())
         return result

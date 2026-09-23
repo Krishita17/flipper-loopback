@@ -1,0 +1,6 @@
+id: rfid_ioprox_xsf
+subsystem: rfid
+description: Kantech ioProx XSF (FSK), 4 data bytes (version, facility, card number).
+stimulus: { kind: emulate, protocol: IoProxXSF, data: "01E01234", read_mode: normal, read_timeout_s: 10 }
+expected: { subsystem: rfid, protocol: IoProxXSF, bits: 32, payload: "01E01234" }
+tags: [regression]

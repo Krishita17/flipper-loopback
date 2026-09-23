@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from serial.tools import list_ports
 
 from flci.cli import FlipperCLI
+from flci.errors import FlciError
 from flci.transport import SerialTransport
 
 # STMicroelectronics VCP IDs used by the Flipper Zero USB CDC interface.
@@ -53,6 +54,7 @@ class Device:
     transport: SerialTransport = field(init=False)
     cli: FlipperCLI = field(init=False)
     info: dict[str, str] = field(default_factory=dict)
+    commands: set[str] = field(default_factory=set)
 
     def __post_init__(self) -> None:
         self.transport = SerialTransport(self.port, name=f"{self.role.value}@{self.port}")
@@ -63,6 +65,13 @@ class Device:
         self.info = self.cli.device_info()
         name = self.info.get("hardware_name", "?")
         self.transport.name = f"{self.role.value}:{name}@{self.port}"
+        self.commands = self.cli.commands()
+
+    def battery_percent(self) -> int | None:
+        try:
+            return int(self.cli.power_info().get("charge.level", ""))
+        except (ValueError, FlciError):
+            return None
 
     def close(self) -> None:
         self.transport.close()

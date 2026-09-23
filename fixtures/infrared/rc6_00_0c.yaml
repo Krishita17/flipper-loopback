@@ -1,0 +1,6 @@
+id: ir_rc6_00_0c
+subsystem: infrared
+description: RC6 address 0x00 command 0x0C via `ir tx`, decoded by `ir rx`.
+stimulus: { kind: message, protocol: RC6, address: "0x00", command: "0x0C", bursts: 3 }
+expected: { subsystem: infrared, protocol: RC6, payload: "00-0C" }
+tags: [regression]

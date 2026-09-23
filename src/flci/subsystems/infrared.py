@@ -16,6 +16,7 @@ TAIL_S = 0.4
 
 class Infrared(ReceiverFirst):
     name = "infrared"
+    required_commands = ("ir",)
     kinds = ("message",)
 
     def arm(self, dut: FlipperCLI, fixture: Fixture) -> None:

@@ -59,6 +59,14 @@ jobs:
 
 The runner must be registered where the calling workflow can reach it (same repo or org).
 
+## Regression gate
+
+Every run that isn't on `main` downloads the `hil-junit` artifact from the latest successful HIL run on `main` and runs `flci compare` against it. The job summary lists regressions (passed on main, fails now), fixes, and cases that lost coverage (passed on main, skipped now). The first run on `main` sets the baseline.
+
+## Soak runs
+
+*Actions → HIL → Run workflow* with `soak_runs: 20` also repeats every fixture 20 times after the normal suite. The pass-rate table (and the RFC evidence rows) appear in the job summary and in `reports/soak.{json,md}`.
+
 ## Results
 
-JUnit XML is published as a **HIL results** check run with a per-fixture summary. Each test case records the DUT/emitter firmware versions and the decodes the DUT saw (`record_property`), and the raw XML is uploaded as an artifact.
+JUnit XML is published as a **HIL results** check run with a per-fixture summary, plus a Markdown job summary from `flci report`. Each test case records the DUT/emitter firmware versions and the decodes the DUT saw (`record_property`), and the raw XML is uploaded as an artifact.

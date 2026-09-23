@@ -1,0 +1,6 @@
+id: ir_pioneer_aa_1c
+subsystem: infrared
+description: Pioneer address 0xAA command 0x1C via `ir tx`, decoded by `ir rx`.
+stimulus: { kind: message, protocol: Pioneer, address: "0xAA", command: "0x1C", bursts: 3 }
+expected: { subsystem: infrared, protocol: Pioneer, payload: "AA-1C" }
+tags: [regression]

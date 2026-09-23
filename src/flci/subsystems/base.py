@@ -36,6 +36,8 @@ class Subsystem(ABC):
     name: str
     #: stimulus kinds this subsystem understands; "kind" defaults to the first one
     kinds: tuple[str, ...] = ()
+    #: top-level CLI commands that must exist on the devices (checked before each test)
+    required_commands: tuple[str, ...] = ()
 
     def kind(self, fixture: Fixture) -> str:
         k = str(fixture.stimulus.get("kind", self.kinds[0]))

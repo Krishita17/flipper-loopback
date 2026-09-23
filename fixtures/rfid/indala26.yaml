@@ -1,0 +1,6 @@
+id: rfid_indala26
+subsystem: rfid
+description: Motorola Indala 26-bit (PSK). Needs `rfid read indala`; normal (ASK) mode won't see it.
+stimulus: { kind: emulate, protocol: Indala26, data: "A0B1C2D3", read_mode: indala, read_timeout_s: 10 }
+expected: { subsystem: rfid, protocol: Indala26, bits: 32, payload: "A0B1C2D3" }
+tags: [regression, psk]

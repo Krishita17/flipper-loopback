@@ -29,6 +29,10 @@ Verified against flipperdevices/flipperzero-firmware ``dev`` (Sept 2026). Source
   (applications/services/loader/loader_cli.c, applications/services/input/input_cli.c)
 - ``update install <manifest>`` -> ``OK.`` then reboot
   (applications/system/updater/cli/updater_cli.c)
+- ``help`` -> ``Available commands:`` then names in ``%-30s`` columns
+  (lib/toolbox/cli/shell/cli_shell.c)
+- ``info power`` -> ``charge.level``, ``battery.voltage``, ... key/value lines
+  (applications/services/cli/cli_main_commands.c, targets/f7/furi_hal/furi_hal_power.c)
 """
 
 from __future__ import annotations
@@ -38,7 +42,7 @@ import re
 import time
 from pathlib import PurePosixPath
 
-from flci.errors import FlciCommandError
+from flci.errors import FlciCommandError, FlciRegionRestricted
 from flci.schema import NormalizedDecode, normalize_hex
 from flci.transport import SerialTransport
 
@@ -63,18 +67,23 @@ _KEY_LINE = re.compile(r"^(?P<protocol>[A-Za-z][A-Za-z0-9_/\-]*) (?P<data>[0-9A-
 _GPIO_READ = re.compile(r"Pin (?P<pin>P[A-C]\d+) <= (?P<level>[01])")
 _NFC_TYPE = re.compile(r"^Type:\s*(?P<type>.+?)\s*$", re.M)
 _NFC_UID = re.compile(r"^UID:\s*(?P<uid>(?:[0-9A-Fa-f]{2}\s*)+)$", re.M)
-_TX_REFUSED = (
-    "Frequency must be in",
-    "restricted in your region",
-    "can only be used for RX",
-    "Usage:",
-)
+_TX_REFUSED = ("Frequency must be in", "Usage:")
+_REGION_REFUSED = ("restricted in your region", "can only be used for RX")
 _SUBGHZ_FILE_ERR = "subghz tx_from_file"
 # Pins on the external header that are not SWD/debug (debug pins prompt y/n).
 SAFE_GPIO_PINS = {"PA7", "PA6", "PA4", "PB3", "PB2", "PC3", "PC1", "PC0"}
 
 
 # -- parsers (pure functions, unit-tested offline) ---------------------------------------
+
+
+def parse_help(text: str) -> set[str]:
+    """Command names from ``help``: whitespace-separated after 'Available commands:'."""
+    text = _norm(text)
+    if "Available commands:" in text:
+        text = text.split("Available commands:", 1)[1]
+    text = text.split("Find out more", 1)[0]
+    return {w for w in text.split() if re.fullmatch(r"[A-Za-z0-9_?]+", w)}
 
 
 def parse_device_info(text: str) -> dict[str, str]:
@@ -194,6 +203,8 @@ class FlipperCLI:
         time.sleep(seconds)
 
     def _check(self, cmd: str, out: str, bad: tuple[str, ...], expected: str) -> str:
+        if any(r in out for r in _REGION_REFUSED):
+            raise FlciRegionRestricted(f"[{self.name}] {cmd!r}: firmware region refused TX: {out}")
         if any(b in out for b in bad):
             raise FlciCommandError(self.name, cmd, expected, out)
         return out
@@ -206,6 +217,14 @@ class FlipperCLI:
         if "hardware_name" not in info and "firmware_version" not in info:
             raise FlciCommandError(self.name, "device_info", "key: value lines", out)
         return info
+
+    def commands(self) -> set[str]:
+        """Top-level CLI commands this firmware exposes (for preflight checks)."""
+        return parse_help(self.t.run("help", timeout_s=5.0))
+
+    def power_info(self) -> dict[str, str]:
+        """Battery state; low charge measurably shortens RF/RFID range, so we record it."""
+        return parse_device_info(self.t.run("info power", timeout_s=5.0))
 
     # -- storage -----------------------------------------------------------------
 
@@ -241,9 +260,10 @@ class FlipperCLI:
             raise ValueError(f"subghz tx key must fit 24 bits, got {key:#x}")
         cmd = f"subghz tx {key:06X} {frequency_hz} {te_us} {repeat} {device}"
         out = self.t.run(cmd, timeout_s=timeout_s)
+        self._check(cmd, out, _TX_REFUSED, "a clean transmit")
         if "Transmitting at" not in out:
             raise FlciCommandError(self.name, cmd, "'Transmitting at ...'", out)
-        return self._check(cmd, out, _TX_REFUSED, "a clean transmit")
+        return out
 
     def subghz_tx_file(
         self,
@@ -254,9 +274,10 @@ class FlipperCLI:
     ) -> str:
         cmd = f"subghz tx_from_file {remote_path} {repeat} {device}"
         out = self.t.run(cmd, timeout_s=timeout_s)
+        self._check(cmd, out, _TX_REFUSED + (_SUBGHZ_FILE_ERR,), "a clean transmit")
         if "Frequency=" not in out:
             raise FlciCommandError(self.name, cmd, "'Frequency=..., Protocol=...'", out)
-        return self._check(cmd, out, _TX_REFUSED + (_SUBGHZ_FILE_ERR,), "a clean transmit")
+        return out
 
     def subghz_rx_start(self, frequency_hz: int, device: int = SUBGHZ_DEVICE_INTERNAL) -> None:
         cmd = f"subghz rx {frequency_hz} {device}"

@@ -36,6 +36,7 @@ def _say(msg: str) -> None:
 
 class BadUsb(Subsystem):
     name = "badusb"
+    required_commands = ("loader", "storage")
     kinds = ("script",)
 
     def prepare(self, emitter: FlipperCLI, dut: FlipperCLI, fixture: Fixture) -> None:

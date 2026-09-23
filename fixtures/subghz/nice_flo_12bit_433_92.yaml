@@ -1,0 +1,7 @@
+id: nice_flo_12bit_433_92
+subsystem: subghz
+description: Nice FLO 12-bit key file. Protocol name contains a space, which exercises the parser.
+stimulus: { kind: file, frequency_hz: 433920000, bursts: 3 }
+stimulus_path: nice_flo_12bit_433_92.sub
+expected: { subsystem: subghz, protocol: Nice FLO, frequency_hz: 433920000, bits: 12, payload: "5A3" }
+tags: [regression, file-tx]

@@ -22,6 +22,9 @@ on:
       tags:
         description: "Optional fixture tags to run (comma list, e.g. smoke)"
         required: false
+      soak_runs:
+        description: "Optional: also soak every fixture N times to measure flakiness"
+        required: false
   # Lets a firmware repo call this bench after it builds an update package.
   workflow_call:
     inputs:
@@ -38,6 +41,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read # download the last main run's results as the regression baseline
   contents: read
   checks: write
   pull-requests: write
@@ -67,7 +71,7 @@ jobs:
           .venv/bin/pip install -q -e '.[dev]'
 
       - name: Detect bench
-        run: .venv/bin/python scripts/detect_devices.py
+        run: .venv/bin/flci detect
 
       - name: Fetch firmware (URL)
         if: inputs.firmware_url != ''
@@ -87,10 +91,45 @@ jobs:
         if: inputs.firmware_url != '' || inputs.firmware_artifact != ''
         run: |
           pkg=$(ls -d fw/*.tgz fw/f7-update-* 2>/dev/null | head -n1)
-          .venv/bin/python scripts/flash_dut.py "$pkg"
+          .venv/bin/flci flash "$pkg"
 
       - name: HIL suite
         run: .venv/bin/pytest -m hardware -v -rs --junitxml=reports/hil-junit.xml
+
+      - name: Job summary
+        if: always()
+        run: |
+          [ -f reports/hil-junit.xml ] || exit 0
+          .venv/bin/flci report reports/hil-junit.xml >> "$GITHUB_STEP_SUMMARY"
+
+      # Regression gate: compare against the most recent successful HIL run on main.
+      - name: Fetch baseline
+        id: baseline
+        if: always() && github.ref != 'refs/heads/main'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow hil.yml --branch main \
+                     --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          [ -n "$run_id" ] || { echo "no baseline yet"; exit 0; }
+          gh run download "$run_id" -R "$GITHUB_REPOSITORY" -n hil-junit -D baseline
+          echo "found=true" >> "$GITHUB_OUTPUT"
+
+      - name: Compare with baseline
+        if: always() && steps.baseline.outputs.found == 'true'
+        run: |
+          set -o pipefail
+          .venv/bin/flci compare baseline/hil-junit.xml reports/hil-junit.xml \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Soak (flakiness)
+        if: inputs.soak_runs != ''
+        env:
+          RUNS: ${{ inputs.soak_runs }}
+        run: |
+          .venv/bin/flci soak --runs "$RUNS" --json reports/soak.json --markdown reports/soak.md || true
+          cat reports/soak.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish results as a check
         if: always()

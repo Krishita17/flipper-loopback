@@ -1,0 +1,6 @@
+id: ir_rca_0f_54
+subsystem: infrared
+description: RCA address 0x0F command 0x54 via `ir tx`, decoded by `ir rx`.
+stimulus: { kind: message, protocol: RCA, address: "0x0F", command: "0x54", bursts: 3 }
+expected: { subsystem: infrared, protocol: RCA, payload: "0F-54" }
+tags: [regression]

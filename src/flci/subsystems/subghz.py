@@ -18,6 +18,7 @@ def remote_path(fixture: Fixture) -> str:
 
 class SubGhz(ReceiverFirst):
     name = "subghz"
+    required_commands = ("subghz", "storage")
     kinds = ("princeton_tx", "file")
 
     def _freq(self, fixture: Fixture) -> int:

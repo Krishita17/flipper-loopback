@@ -13,6 +13,7 @@ from flci.subsystems.base import EmitterFirst, as_int
 
 class IButton(EmitterFirst):
     name = "ibutton"
+    required_commands = ("ikey",)
     kinds = ("emulate",)
 
     def start_emit(self, emitter: FlipperCLI, fixture: Fixture) -> None:

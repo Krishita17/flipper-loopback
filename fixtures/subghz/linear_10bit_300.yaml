@@ -1,0 +1,11 @@
+id: linear_10bit_300
+subsystem: subghz
+description: >
+  Linear 10-bit at 300 MHz. Decoder quirk kept on purpose: lib/subghz/protocols/linear.c
+  stores the key inverted and inverts it again for display, so the key file's 0x155 is
+  printed as 0x2AA. If the firmware ever "fixes" one side only, this fixture catches it.
+  300 MHz TX may be region-locked; the harness then skips with the reason.
+stimulus: { kind: file, frequency_hz: 300000000, bursts: 3 }
+stimulus_path: linear_10bit_300.sub
+expected: { subsystem: subghz, protocol: Linear, frequency_hz: 300000000, bits: 10, payload: "2AA" }
+tags: [regression, file-tx, decoder-quirk]

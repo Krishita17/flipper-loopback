@@ -32,3 +32,18 @@ class FlciCommandError(FlciError):
         self.expected = expected
         self.got = got
         super().__init__(f"[{device}] {command!r} failed: expected {expected}, got: {got[-400:]!r}")
+
+
+class FlciEnvironmentSkip(FlciError):
+    """The bench or DUT can't run this case at all; not a decode failure.
+
+    Tests turn this into a skip with the message (or a failure under FLCI_STRICT=1).
+    """
+
+
+class FlciUnsupported(FlciEnvironmentSkip):
+    """The DUT firmware does not expose a CLI command this subsystem needs."""
+
+
+class FlciRegionRestricted(FlciEnvironmentSkip):
+    """The firmware's region settings refuse to transmit on this frequency."""

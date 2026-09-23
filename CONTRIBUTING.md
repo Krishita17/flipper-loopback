@@ -1,12 +1,12 @@
 # Contributing
 
 ## Bench reports (most wanted)
-Run `pytest -m hardware -v` on two Flippers and open a *Bench report* issue. Include firmware versions, jig mode/spacing, and pass/fail/flaky counts per subsystem. These numbers replace the estimates in `docs/ROADMAP.md` and the RFC.
+Run `flci soak --runs 20` on two Flippers and open a *Bench report* issue with the generated `reports/soak.md`, firmware versions and jig mode/spacing. These numbers replace the estimates in `docs/ROADMAP.md` and the RFC.
 
 ## New fixtures
-1. Add `fixtures/<subsystem>/<id>.yaml` (plus a stimulus file if the kind needs one), or use `scripts/record_fixture.py`.
+1. Add `fixtures/<subsystem>/<id>.yaml` (plus a stimulus file if the kind needs one), or use `flci record`.
 2. Use synthetic keys/IDs, or ones from devices you own. Never commit someone else's credentials.
-3. Run `pytest`. The loader validates every fixture and the offline orchestration tests exercise it.
+3. Run `flci fixtures` and `pytest`. The loader validates every fixture and the offline orchestration tests exercise it.
 
 ## Code
 - Firmware command strings go in `src/flci/cli.py` **only**, with the firmware source file that confirms them.

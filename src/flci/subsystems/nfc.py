@@ -17,6 +17,7 @@ def remote_path(fixture: Fixture) -> str:
 
 class Nfc(EmitterFirst):
     name = "nfc"
+    required_commands = ("nfc", "storage")
     kinds = ("emulate_file",)
 
     def prepare(self, emitter: FlipperCLI, dut: FlipperCLI, fixture: Fixture) -> None:

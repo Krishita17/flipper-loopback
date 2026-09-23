@@ -12,6 +12,7 @@ from flci.subsystems.base import EmitterFirst, as_int
 
 class Rfid(EmitterFirst):
     name = "rfid"
+    required_commands = ("rfid",)
     kinds = ("emulate",)
 
     def start_emit(self, emitter: FlipperCLI, fixture: Fixture) -> None:

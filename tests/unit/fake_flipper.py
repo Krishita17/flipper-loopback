@@ -21,11 +21,24 @@ class Air:
     ir: list[str] = field(default_factory=list)
     presented: dict[str, str] = field(default_factory=dict)  # ibutton/rfid/nfc -> line
     wires: dict[str, int] = field(default_factory=dict)
+    log: list[tuple[str, str]] = field(default_factory=list)  # (device, command), both sides
 
 
 class FakeFlipper:
-    def __init__(self, name: str, air: Air, fw: str = "1.4.0"):
+    def __init__(
+        self,
+        name: str,
+        air: Air,
+        fw: str = "1.4.0",
+        commands: set[str] | None = None,
+        region_blocked_hz: set[int] | None = None,
+    ):
         self.name, self.air, self.fw = name, air, fw
+        self.cli_commands = commands or {
+            "help", "device_info", "info", "subghz", "ir", "ikey", "rfid",
+            "nfc", "gpio", "storage", "loader", "input", "update",
+        }  # fmt: skip
+        self.region_blocked_hz = region_blocked_hz or set()
         self.out = bytearray()
         self.line = bytearray()
         self.stream: str | None = None
@@ -92,11 +105,19 @@ class FakeFlipper:
             self.out += b">: "
             return
         self.commands.append(cmd)
+        self.air.log.append((self.name, cmd))
         reply = self._reply(cmd)
         if reply is not None:
             self.out += reply.encode() + PROMPT
 
     def _reply(self, cmd: str) -> str | None:  # noqa: C901 - a flat dispatch table
+        if cmd == "help":
+            names = "".join(f"{c:<30}" for c in sorted(self.cli_commands))
+            return f"Available commands:\r\n{names}\r\nFind out more: https://docs.flipper.net"
+        if cmd == "info power":
+            return f"{'charge.level':<30}: 87\r\n{'battery.voltage':<30}: 4012"
+        if cmd.split()[0] not in self.cli_commands:
+            return f"`{cmd.split()[0]}` command not found"
         if cmd == "device_info":
             return f"{'hardware_name':<30}: {self.name}\r\n{'firmware_version':<30}: {self.fw}"
         if m := re.fullmatch(r"subghz tx ([0-9A-F]{6}) (\d+) \d+ \d+ \d", cmd):
@@ -108,11 +129,16 @@ class FakeFlipper:
             return None
         if m := re.fullmatch(r"subghz tx_from_file (\S+) \d+ \d", cmd):
             body = self.files[m.group(1)].decode()
-            proto = re.search(r"Protocol: (\S+)", body).group(1)  # type: ignore[union-attr]
+            proto = re.search(r"Protocol: (.+)", body).group(1).strip()  # type: ignore[union-attr]
             bits = int(re.search(r"Bit: (\d+)", body).group(1))  # type: ignore[union-attr]
-            key = re.search(r"Key: ([0-9A-F ]+)", body).group(1)  # type: ignore[union-attr]
-            self.air.subghz.append(f"{proto} {bits}bit\r\nKey:0x{key.replace(' ', '')[-8:]}\r\n")
-            return f"Listening at x. Frequency=433920000, Protocol={proto}\r\n\r\n."
+            key = int(re.search(r"Key: ([0-9A-F ]+)", body).group(1).replace(" ", ""), 16)  # type: ignore[union-attr]
+            freq = int(re.search(r"Frequency: (\d+)", body).group(1))  # type: ignore[union-attr]
+            if freq in self.region_blocked_hz:
+                return "Transmission on this frequency is restricted in your region"
+            if proto == "Linear":  # lib/subghz/protocols/linear.c displays ~data
+                key = ~key & 0x3FF
+            self.air.subghz.append(f"{proto} {bits}bit\r\nKey:0x{key:08X}\r\n")
+            return f"Listening at x. Frequency={freq}, Protocol={proto}\r\n\r\n."
         if m := re.fullmatch(r"ir tx (\S+) ([0-9A-F]+) ([0-9A-F]+)", cmd):
             self.air.ir.append(f"{m.group(1)}, A:0x{m.group(2)}, C:0x{m.group(3)}\r\n")
             return ""
@@ -126,7 +152,7 @@ class FakeFlipper:
             self.stream = f"present:{kind}"
             self.out += b"Emulating ...\r\nPress Ctrl+C to abort\r\n"
             return None
-        if cmd in ("ikey read", "rfid read normal"):
+        if cmd in ("ikey read", "rfid read normal", "rfid read indala"):
             kind = "ibutton" if cmd.startswith("ikey") else "rfid"
             line = self.air.presented.get(kind)
             head = "Reading...\r\nPress Ctrl+C to abort\r\n"
