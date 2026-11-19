@@ -68,7 +68,7 @@ jobs:
       FLCI_TAGS: ${{ inputs.tags }}
       FLCI_DIRECTIONS: ${{ inputs.directions || 'dut_rx,dut_tx' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Python env
         run: |
@@ -87,7 +87,7 @@ jobs:
 
       - name: Fetch firmware (artifact)
         if: inputs.firmware_artifact != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.firmware_artifact }}
           path: fw
@@ -140,14 +140,14 @@ jobs:
 
       - name: Publish results as a check
         if: always()
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@v6
         with:
           report_paths: reports/hil-junit.xml
           check_name: HIL results
           include_passed: true
           detailed_summary: true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: hil-junit
