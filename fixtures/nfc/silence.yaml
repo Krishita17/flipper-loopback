@@ -1,0 +1,6 @@
+id: nfc_silence
+subsystem: nfc
+description: NEGATIVE (partial). `mfu info` with no tag in the field must find no UID.
+stimulus: { kind: silence, read_timeout_s: 4 }
+expect_no_decode: true
+tags: [negative, partial]

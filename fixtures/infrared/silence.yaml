@@ -1,0 +1,6 @@
+id: ir_silence
+subsystem: infrared
+description: NEGATIVE. `ir rx` for 3 s with no IR sent must report no decoded signal.
+stimulus: { kind: silence, listen_s: 3 }
+expect_no_decode: true
+tags: [negative, regression]

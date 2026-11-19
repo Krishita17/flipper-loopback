@@ -40,12 +40,19 @@ All four phases are implemented in code. **None of it has been validated on a ph
 - [x] Battery level recorded per result (`info power` → `charge.level`)
 - [x] Fixtures: Nice FLO, Linear (decoder display quirk), RC6, Pioneer, RCA, Indala26 (PSK), IoProxXSF
 
+## Since v0.5
+- [x] Both directions: every case also runs with the DUT transmitting (`@dut_tx`)
+- [x] Negative `silence` fixtures for Sub-GHz (environment check), IR, RFID, iButton, NFC
+- [x] Per-fixture timing budgets (`max_duration_s`) and budget suggestions from soak p95
+- [x] `flci doctor [--probe]` bench diagnostics
+- [x] Self-contained HTML reports for runs and soaks
+- [x] Dependabot, pre-commit hooks, tag-triggered release workflow
+
 ## Next
 - [ ] *bench* First soak run; fill the nondeterminism table and the RFC evidence table
 - [ ] Machine-readable receiver output upstream (see RFC question 3) to replace regex parsing
 - [ ] Emitter alternatives: ESP32 + CC1101 for Sub-GHz, PN532 for NFC readers
 - [ ] NFC: MIFARE Classic / ISO14443-4A reads once a CLI read path is confirmed
-- [ ] Per-fixture timing budgets (fail on decode-time regressions, not just wrong decodes)
 
 ## Coverage matrix
 

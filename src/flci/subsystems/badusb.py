@@ -37,19 +37,21 @@ def _say(msg: str) -> None:
 class BadUsb(Subsystem):
     name = "badusb"
     required_commands = ("loader", "storage")
+    # The DUT is the one typing; the host (not the emitter) is the receiver.
+    directions = ("dut_tx",)
     kinds = ("script",)
 
-    def prepare(self, emitter: FlipperCLI, dut: FlipperCLI, fixture: Fixture) -> None:
+    def prepare(self, sender: FlipperCLI, receiver: FlipperCLI, fixture: Fixture) -> None:
         self.kind(fixture)
         if fixture.stimulus_path is None:
             raise ValueError(f"{fixture.id}: BadUSB fixtures need stimulus_path (.txt script)")
-        dut.storage_upload(fixture.stimulus_path.read_bytes(), remote_path(fixture))
+        sender.storage_upload(fixture.stimulus_path.read_bytes(), remote_path(fixture))
 
-    def exchange(self, emitter: FlipperCLI, dut: FlipperCLI, fixture: Fixture) -> Exchange:
+    def exchange(self, sender: FlipperCLI, receiver: FlipperCLI, fixture: Fixture) -> Exchange:
         s = fixture.stimulus
         vid, pid = (int(x, 16) for x in str(s["hid_id"]).split(":"))
-        dut.loader_open("Bad USB", remote_path(fixture))
-        dut.t.close()  # the CDC port is about to vanish
+        sender.loader_open("Bad USB", remote_path(fixture))
+        sender.t.close()  # the CDC port is about to vanish
         kb = find_keyboard(vid, pid, timeout_s=as_int(s.get("enumerate_timeout_s", 30)))
         _say("press OK on the DUT to run the script")
         try:
@@ -57,7 +59,7 @@ class BadUsb(Subsystem):
         finally:
             kb.close()
         _say("press BACK on the DUT (twice) to exit Bad USB")
-        self._reconnect(dut, timeout_s=as_int(s.get("operator_timeout_s", 60)))
+        self._reconnect(sender, timeout_s=as_int(s.get("operator_timeout_s", 60)))
         decode = NormalizedDecode(
             subsystem="badusb",
             protocol="keystrokes",
@@ -67,14 +69,14 @@ class BadUsb(Subsystem):
         return Exchange([decode], f"captured text: {text!r}")
 
     @staticmethod
-    def _reconnect(dut: FlipperCLI, timeout_s: float) -> None:
+    def _reconnect(dev: FlipperCLI, timeout_s: float) -> None:
         deadline = time.monotonic() + timeout_s
         last: Exception | None = None
         while time.monotonic() < deadline:
             try:
-                dut.t.open()
+                dev.t.open()
                 return
             except (OSError, FlciError) as e:
                 last = e
                 time.sleep(1.0)
-        raise FlciError(f"[{dut.name}] CLI did not come back after Bad USB: {last}")
+        raise FlciError(f"[{dev.name}] CLI did not come back after Bad USB: {last}")

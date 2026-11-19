@@ -32,7 +32,10 @@ class FakeFlipper:
         fw: str = "1.4.0",
         commands: set[str] | None = None,
         region_blocked_hz: set[int] | None = None,
+        sd_card: bool = True,
+        battery_pct: int = 87,
     ):
+        self.sd_card, self.battery_pct = sd_card, battery_pct
         self.name, self.air, self.fw = name, air, fw
         self.cli_commands = commands or {
             "help", "device_info", "info", "subghz", "ir", "ikey", "rfid",
@@ -115,7 +118,11 @@ class FakeFlipper:
             names = "".join(f"{c:<30}" for c in sorted(self.cli_commands))
             return f"Available commands:\r\n{names}\r\nFind out more: https://docs.flipper.net"
         if cmd == "info power":
-            return f"{'charge.level':<30}: 87\r\n{'battery.voltage':<30}: 4012"
+            return f"{'charge.level':<30}: {self.battery_pct}\r\n{'battery.voltage':<30}: 4012"
+        if cmd == "storage info /ext":
+            if not self.sd_card:
+                return "Storage error: internal error"
+            return "Label: FLIPPER SD\r\nType: FAT32\r\n31154688KiB total\r\n30000000KiB free"
         if cmd.split()[0] not in self.cli_commands:
             return f"`{cmd.split()[0]}` command not found"
         if cmd == "device_info":

@@ -25,6 +25,10 @@ on:
       soak_runs:
         description: "Optional: also soak every fixture N times to measure flakiness"
         required: false
+      directions:
+        description: "dut_rx (receive path), dut_tx (transmit path), or both"
+        required: false
+        default: "dut_rx,dut_tx"
   # Lets a firmware repo call this bench after it builds an update package.
   workflow_call:
     inputs:
@@ -62,6 +66,7 @@ jobs:
       FLCI_EMITTER: ${{ vars.FLCI_EMITTER }}
       FLCI_CAPABILITIES: ${{ vars.FLCI_CAPABILITIES }}
       FLCI_TAGS: ${{ inputs.tags }}
+      FLCI_DIRECTIONS: ${{ inputs.directions || 'dut_rx,dut_tx' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -70,8 +75,8 @@ jobs:
           python3 -m venv .venv
           .venv/bin/pip install -q -e '.[dev]'
 
-      - name: Detect bench
-        run: .venv/bin/flci detect
+      - name: Bench health
+        run: .venv/bin/flci doctor
 
       - name: Fetch firmware (URL)
         if: inputs.firmware_url != ''
@@ -100,7 +105,8 @@ jobs:
         if: always()
         run: |
           [ -f reports/hil-junit.xml ] || exit 0
-          .venv/bin/flci report reports/hil-junit.xml >> "$GITHUB_STEP_SUMMARY"
+          .venv/bin/flci report reports/hil-junit.xml --html reports/hil-report.html \
+            >> "$GITHUB_STEP_SUMMARY"
 
       # Regression gate: compare against the most recent successful HIL run on main.
       - name: Fetch baseline
@@ -130,6 +136,7 @@ jobs:
         run: |
           .venv/bin/flci soak --runs "$RUNS" --json reports/soak.json --markdown reports/soak.md || true
           cat reports/soak.md >> "$GITHUB_STEP_SUMMARY"
+          .venv/bin/flci report --soak reports/soak.json --html reports/soak-report.html > /dev/null
 
       - name: Publish results as a check
         if: always()

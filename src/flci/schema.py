@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 SUBSYSTEMS = {"subghz", "infrared", "ibutton", "rfid", "nfc", "gpio", "badusb"}
 
@@ -90,9 +90,22 @@ class Fixture(BaseModel):
     # stimulus_path points at the equivalent .sub/.ir/... file for file-based TX (Phase 2).
     stimulus: dict[str, Any]
     stimulus_path: Path | None = None
-    expected: NormalizedDecode
+    expected: NormalizedDecode | None = None
+    #: negative fixture: pass only if the receiver decodes nothing at all
+    expect_no_decode: bool = False
+    #: optional timing budget for the whole exchange; exceeding it fails the case
+    max_duration_s: float | None = Field(default=None, gt=0)
     tags: list[str] = Field(default_factory=list)
     source: Path | None = Field(default=None, exclude=True)
+
+    @model_validator(mode="after")
+    def _expectation(self) -> Fixture:
+        if self.expect_no_decode == (self.expected is not None):
+            raise ValueError("give exactly one of `expected` or `expect_no_decode: true`")
+        return self
+
+    def describe_expectation(self) -> str:
+        return "no decode at all" if self.expected is None else self.expected.short()
 
     @field_validator("id")
     @classmethod

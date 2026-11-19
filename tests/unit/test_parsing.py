@@ -163,3 +163,17 @@ def test_roles_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
         PortInfo("/dev/cu.usbmodemflip_Emt21", None, ""),
     ]
     assert resolve_roles(ports) == ("/dev/cu.usbmodemflip_Emt21", "/dev/cu.usbmodemflip_Dut11")
+
+
+def test_fixture_needs_exactly_one_expectation(tmp_path: Path) -> None:
+    both = tmp_path / "both.yaml"
+    both.write_text(
+        "id: x\nsubsystem: infrared\nstimulus: {kind: silence}\nexpect_no_decode: true\n"
+        "expected: {subsystem: infrared, protocol: NEC, payload: '1-2'}\n"
+    )
+    with pytest.raises(FixtureError, match="exactly one"):
+        load_fixture(both)
+    neither = tmp_path / "neither.yaml"
+    neither.write_text("id: y\nsubsystem: infrared\nstimulus: {kind: silence}\n")
+    with pytest.raises(FixtureError, match="exactly one"):
+        load_fixture(neither)

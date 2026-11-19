@@ -7,6 +7,8 @@
 ![license](https://img.shields.io/badge/license-MIT-green)
 ![bench](https://img.shields.io/badge/bench%20validation-wanted-orange)
 
+**Both directions:** every case runs with the candidate firmware *receiving* (known-good emitter → DUT) and *transmitting* (DUT → known-good emitter), so a regression in either the decoder or the encoder/emulator is caught.
+
 Flipper's [integration test cases](https://github.com/flipperdevices/flipperzero-firmware/blob/dev/documentation/testing/integration_tests.md) are run by hand today. You can't mock radio in software, so this project uses a second physical device instead. One Flipper (the **emitter**) sends a known signal. The other (the **DUT**, running the candidate firmware *unmodified*) receives and decodes it. A Python/pytest runner checks the decode against a versioned fixture and writes JUnit XML that any CI system can read.
 
 ```
@@ -42,7 +44,12 @@ Every serial command is checked against the firmware source (file references are
 ## Features
 
 - **Stock-firmware DUT**: driven only over the USB CLI; no test build, no SWD.
-- **24 fixtures across 7 subsystems**, all YAML. Adding a case needs no code.
+- **29 fixtures across 7 subsystems**, all YAML. Adding a case needs no code.
+- **Receive and transmit paths**: each fixture runs as `@dut_rx` and `@dut_tx` (47 hardware cases in total).
+- **Negative fixtures**: `silence` cases listen with nothing sent and must decode *nothing*, which catches ghost decodes and stuck decoders.
+- **Timing budgets**: a fixture can set `max_duration_s`; a correct but slow decode fails. `flci soak` suggests budgets from measured p95.
+- **`flci doctor`**: checks ports, permissions, qFlipper, roles, firmware CLI commands, SD card, battery and (with `--probe`) wiring, and says exactly what to fix.
+- **HTML reports**: `flci report ... --html report.html` writes one self-contained, shareable page (light/dark).
 - **Preflight**: if the DUT firmware lacks a needed CLI command, or its region blocks a frequency, the test is *skipped with the reason* instead of reported as a decode failure (`FLCI_STRICT=1` turns those into failures).
 - **Flakiness measurement**: `flci soak --runs 20` gives per-fixture pass rates, p50/p95 timings, every distinct decode, and the RFC evidence table.
 - **Regression gate**: `flci compare base.xml candidate.xml` lists what broke, what got fixed and what lost coverage. CI compares every run against the last green `main`.
@@ -70,7 +77,7 @@ pytest
 With **two Flippers** on USB (close qFlipper first, since it holds the serial port):
 
 ```bash
-flci detect                                   # list Flippers, firmware, ports
+flci doctor                                   # is the bench ready? what to fix
 export FLCI_DUT=<port or device name>         # flashed with the build under test
 export FLCI_EMITTER=<port or device name>     # known-good counterpart
 export FLCI_CAPABILITIES=subghz,infrared,rfid,nfc   # what your bench is set up for
@@ -81,7 +88,9 @@ pytest -m hardware -v                         # JUnit XML -> reports/junit.xml
 |---|---|
 | `FLCI_DUT`, `FLCI_EMITTER` | Required. Port path or Flipper name. Roles are never guessed |
 | `FLCI_CAPABILITIES` | Subsystems this bench supports. Default `subghz,infrared,rfid,nfc`; add `ibutton`, `gpio` once [wired](hardware/WIRING.md), and `badusb` for operator runs |
-| `FLCI_TAGS` | Only run fixtures with these tags, e.g. `smoke` |
+| `FLCI_DIRECTIONS` | `dut_rx`, `dut_tx` or both (default both) |
+| `FLCI_TAGS` | Only run fixtures with these tags, e.g. `smoke`, `negative` |
+| `FLCI_EXCLUDE_TAGS` | Leave out fixtures with these tags (default `environment`) |
 | `FLCI_OPERATOR=1` | Allow the operator-assisted BadUSB test (run with `pytest -s`) |
 | `FLCI_STRICT=1` | Treat missing CLI commands and region locks as failures instead of skips |
 
@@ -91,10 +100,11 @@ A failing round trip prints what was expected, every packet the DUT decoded, bot
 
 | Command | What it does |
 |---|---|
+| `flci doctor [--probe]` | Check the bench is ready; `--probe` runs one smoke case per subsystem |
 | `flci detect` | List connected Flippers, firmware versions and assigned roles |
 | `flci fixtures` | List and validate every fixture |
-| `flci soak --runs 20 [--subsystem rfid] [--tag smoke]` | Repeat fixtures, write `reports/soak.{json,md}` |
-| `flci report reports/junit.xml` | Markdown summary of a run (or `--soak reports/soak.json`) |
+| `flci soak --runs 20 [--subsystem rfid] [--tag smoke] [--direction dut_tx]` | Repeat cases, write `reports/soak.{json,md}` with suggested timing budgets |
+| `flci report reports/junit.xml [--html out.html]` | Markdown summary of a run (or `--soak reports/soak.json`), optional HTML page |
 | `flci compare base.xml cand.xml` | Regressions between two runs; exit code 1 if any |
 | `flci record from-sub/from-ir/live ...` | Create a fixture from a saved file or a live capture |
 | `flci flash PACKAGE` | Flash the DUT from an update package and verify it |
@@ -127,11 +137,21 @@ flci record from-ir   tv.ir --signal Power --id tv_power
 flci record live rfid --port "$FLCI_DUT" --id my_fob
 ```
 
-A broken fixture (bad YAML, unknown subsystem, missing stimulus file, duplicate id) stops the run with the file name and the reason.
+Negative cases and timing budgets are fields on the same YAML:
+
+```yaml
+id: rfid_silence
+subsystem: rfid
+stimulus: { kind: silence, read_timeout_s: 4 }   # send nothing
+expect_no_decode: true                           # any decode fails the case
+max_duration_s: 8                                # optional timing budget
+```
+
+A broken fixture (bad YAML, unknown subsystem, missing stimulus file, duplicate id, both or neither of `expected`/`expect_no_decode`) stops the run with the file name and the reason.
 
 ## CI on a bench
 
-[`.github/workflows/hil.yml`](.github/workflows/hil.yml) runs the suite on a **self-hosted** runner with both Flippers attached, optionally flashes the DUT first (`flci flash`, stock `update install`, no DFU), publishes JUnit as a **HIL results** check, writes a Markdown job summary, and **compares against the last green `main` run** to flag regressions. A manual run can also soak every fixture N times. It runs one job at a time (there's only one bench) and never runs fork PRs. Setup is in [docs/CI.md](docs/CI.md).
+[`.github/workflows/hil.yml`](.github/workflows/hil.yml) runs the suite on a **self-hosted** runner with both Flippers attached, optionally flashes the DUT first (`flci flash`, stock `update install`, no DFU), publishes JUnit as a **HIL results** check, writes a Markdown job summary and an HTML report artifact, and **compares against the last green `main` run** to flag regressions. It starts with `flci doctor`, so a misconfigured bench fails fast with a clear reason. A manual run can also soak every fixture N times. It runs one job at a time (there's only one bench) and never runs fork PRs. Setup is in [docs/CI.md](docs/CI.md).
 
 ## Hardware
 

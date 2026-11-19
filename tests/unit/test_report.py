@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from html import escape
 from pathlib import Path
 
 import pytest
@@ -22,7 +23,7 @@ def _junit(tmp_path: Path, name: str, cases: dict[str, str]) -> Path:
         }[status]
         body.append(
             f'<testcase classname="tests.test_{sub}_loopback" '
-            f'name="test_{sub}_round_trip[{case}]">'
+            f'name="test_{sub}_round_trip[{escape(case)}]">'
             f'<properties><property name="dut_firmware" value="1.4.0"/></properties>{inner}'
             "</testcase>"
         )
@@ -72,3 +73,19 @@ def test_cli_entrypoint(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert "fixtures OK" in out and "linear_10bit_300" in out
     assert main(["nope"]) == 2
+
+
+def test_html_reports(tmp_path: Path) -> None:
+    from flci.html_report import soak_html
+    from flci.soak import FixtureStats, SoakReport
+
+    j = _junit(tmp_path, "h.xml", {"subghz_a": "pass", "subghz_<b>": "fail"})
+    out = tmp_path / "r.html"
+    assert main(["report", str(j), "--html", str(out)]) == 0
+    page = out.read_text()
+    assert page.startswith("<!DOCTYPE html>") and "prefers-color-scheme:dark" in page
+    assert "subghz_&lt;b&gt;" in page and "<b>]" not in page  # escaped
+    st = FixtureStats("fx", "rfid", runs=12, passed=11, durations_s=[1.0] * 12)
+    soak = SoakReport("2026-11-18", 12, "1.4.0", "1.5.0-rc", [st])
+    html_page = soak_html(soak)
+    assert "flaky" in html_page and "11/12" in html_page and "1.5" in html_page

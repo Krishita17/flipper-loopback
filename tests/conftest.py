@@ -3,6 +3,10 @@
 A bench declares what it is physically set up for with ``FLCI_CAPABILITIES`` (comma list).
 Default is the air-gap-only set; wired and operator subsystems must be opted into, because
 running them on a bench without the wiring would produce false failures.
+
+Every case runs in each direction in ``FLCI_DIRECTIONS`` (default both): ``dut_rx`` tests the
+candidate firmware's receive path, ``dut_tx`` its transmit/emulate path.
+Fixtures tagged with anything in ``FLCI_EXCLUDE_TAGS`` (default ``environment``) are left out.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from flci.errors import FlciEnvironmentSkip
 from flci.fixtures import load_fixtures
 from flci.rig import Rig
 from flci.schema import Fixture
+from flci.subsystems import REGISTRY
 
 DEFAULT_CAPABILITIES = "subghz,infrared,rfid,nfc"
 OPT_IN = {
@@ -31,17 +36,31 @@ def capabilities() -> set[str]:
     return {c.strip() for c in raw.split(",") if c.strip()}
 
 
+def _env_set(name: str, default: str = "") -> set[str]:
+    return {t.strip() for t in os.environ.get(name, default).split(",") if t.strip()}
+
+
+def directions() -> list[str]:
+    return [d for d in ("dut_rx", "dut_tx") if d in _env_set("FLCI_DIRECTIONS", "dut_rx,dut_tx")]
+
+
 def fixture_params(subsystem: str) -> list[object]:
-    """Parametrize a test over every fixture of a subsystem, honouring FLCI_TAGS."""
-    tags = {t for t in os.environ.get("FLCI_TAGS", "").split(",") if t}
-    fixtures = load_fixtures(subsystem, tags=tags or None)
-    marks = [getattr(pytest.mark, subsystem), pytest.mark.hardware]
-    return [
-        pytest.param(
-            f, id=f.id, marks=marks + ([pytest.mark.partial] if "partial" in f.tags else [])
-        )
-        for f in fixtures
-    ]
+    """Parametrize over (fixture, direction), honouring FLCI_TAGS / FLCI_EXCLUDE_TAGS."""
+    tags = _env_set("FLCI_TAGS")
+    exclude = _env_set("FLCI_EXCLUDE_TAGS", "environment") - tags
+    fixtures = [f for f in load_fixtures(subsystem, tags=tags or None) if not exclude & set(f.tags)]
+    sub_dirs = REGISTRY[subsystem].directions
+    params = []
+    for f in fixtures:
+        marks = [getattr(pytest.mark, subsystem), pytest.mark.hardware]
+        if "partial" in f.tags:
+            marks.append(pytest.mark.partial)
+        if f.expect_no_decode:
+            marks.append(pytest.mark.negative)
+        for d in directions():
+            if d in sub_dirs:
+                params.append(pytest.param(f, d, id=f"{f.id}@{d}", marks=marks))
+    return params
 
 
 @pytest.fixture(scope="session")
@@ -72,13 +91,13 @@ def rig() -> Iterator[Rig]:
         dut.close()
 
 
-def run_round_trip(rig: Rig, fixture: Fixture, record_property: object) -> None:
+def run_round_trip(rig: Rig, fixture: Fixture, direction: str, record_property: object) -> None:
     """Shared body of every loopback test."""
     if fixture.subsystem not in capabilities():
         hint = OPT_IN.get(fixture.subsystem, "add it to FLCI_CAPABILITIES")
         pytest.skip(f"bench not set up for {fixture.subsystem}: {hint}")
     try:
-        result = rig.round_trip(fixture)
+        result = rig.round_trip(fixture, direction)
     except FlciEnvironmentSkip as e:
         if os.environ.get("FLCI_STRICT") == "1":
             raise
@@ -91,6 +110,7 @@ def run_round_trip(rig: Rig, fixture: Fixture, record_property: object) -> None:
         record_property("emitter_firmware", result.emitter_fw)
         record_property("decodes", "; ".join(d.short() for d in result.decodes))
         record_property("duration_s", f"{result.duration_s:.2f}")
+        record_property("direction", direction)
     assert result.passed, result.explain()
 
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flipper-loopback"
-version = "0.5.0"
+version = "0.6.0"
 description = "Hardware-in-the-loop regression harness for Flipper Zero firmware: two devices, one air gap, pass/fail."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -51,6 +51,7 @@ markers = [
   "gpio: GPIO loopback tests (wired)",
   "badusb: BadUSB tests (partial, operator-assisted)",
   "partial: subsystem with known, documented coverage gaps",
+  "negative: expects NO decode (ghost-decode / false-positive check)",
 ]
 
 [tool.ruff]

@@ -1,0 +1,6 @@
+id: rfid_silence
+subsystem: rfid
+description: NEGATIVE. `rfid read` with no card presented must time out with no decode.
+stimulus: { kind: silence, read_timeout_s: 4 }
+expect_no_decode: true
+tags: [negative, regression]

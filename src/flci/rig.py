@@ -1,4 +1,10 @@
-"""The rig: one emitter, one DUT, one air gap. ``round_trip`` is the whole test."""
+"""The rig: one emitter, one DUT, one air gap. ``round_trip`` is the whole test.
+
+``direction`` picks who transmits:
+
+- ``dut_rx``: the known-good emitter sends, the candidate DUT decodes (receive path).
+- ``dut_tx``: the candidate DUT sends, the known-good emitter decodes (transmit path).
+"""
 
 from __future__ import annotations
 
@@ -10,6 +16,7 @@ from flci.devices import Device
 from flci.errors import FlciUnsupported
 from flci.schema import Fixture, NormalizedDecode
 from flci.subsystems import REGISTRY
+from flci.subsystems.base import DIRECTIONS
 
 log = logging.getLogger(__name__)
 
@@ -18,23 +25,43 @@ log = logging.getLogger(__name__)
 class RoundTripResult:
     fixture_id: str
     passed: bool
-    expected: NormalizedDecode
+    expected: NormalizedDecode | None
     decodes: list[NormalizedDecode]
-    dut_output: str
+    dut_output: str  # raw output of whichever device received
     duration_s: float
     emitter_fw: str
     dut_fw: str
+    direction: str = "dut_rx"
+    expect_no_decode: bool = False
+    over_budget: bool = False
+    max_duration_s: float | None = None
     notes: list[str] = field(default_factory=list)
     battery: dict[str, int | None] = field(default_factory=dict)
 
+    @property
+    def receiver_label(self) -> str:
+        return "DUT" if self.direction == "dut_rx" else "emitter (known-good)"
+
     def explain(self) -> str:
         got = "\n    ".join(d.short() for d in self.decodes) or "<no decodes>"
+        want = "no decode at all" if self.expected is None else self.expected.short()
+        way = (
+            "emitter -> DUT (testing DUT receive)"
+            if self.direction == "dut_rx"
+            else "DUT -> emitter (testing DUT transmit)"
+        )
+        budget = ""
+        if self.max_duration_s is not None:
+            flag = " EXCEEDED" if self.over_budget else ""
+            budget = f" (budget {self.max_duration_s:.1f}s{flag})"
+        notes = "".join(f"\n  note: {n}" for n in self.notes)
         return (
-            f"fixture {self.fixture_id}: {'PASS' if self.passed else 'FAIL'} "
-            f"in {self.duration_s:.2f}s (emitter fw {self.emitter_fw}, DUT fw {self.dut_fw})\n"
-            f"  expected: {self.expected.short()}\n"
-            f"  DUT decoded:\n    {got}\n"
-            f"  raw DUT output (tail):\n{self.dut_output[-800:]}"
+            f"fixture {self.fixture_id} [{way}]: {'PASS' if self.passed else 'FAIL'} "
+            f"in {self.duration_s:.2f}s{budget} "
+            f"(emitter fw {self.emitter_fw}, DUT fw {self.dut_fw})\n"
+            f"  expected: {want}\n"
+            f"  {self.receiver_label} decoded:\n    {got}{notes}\n"
+            f"  raw {self.receiver_label} output (tail):\n{self.dut_output[-800:]}"
         )
 
 
@@ -61,28 +88,48 @@ class Rig:
                     f"{dev.role.value} firmware {dev.firmware} has no CLI command(s) {missing}"
                 )
 
-    def round_trip(self, fixture: Fixture) -> RoundTripResult:
+    def round_trip(self, fixture: Fixture, direction: str = "dut_rx") -> RoundTripResult:
         sub = REGISTRY[fixture.subsystem]()
+        if direction not in DIRECTIONS:
+            raise ValueError(f"direction must be one of {DIRECTIONS}, got {direction!r}")
+        if direction not in sub.directions:
+            raise ValueError(f"{fixture.subsystem} only runs {sub.directions}, not {direction}")
+        sender, receiver = (
+            (self.emitter, self.dut) if direction == "dut_rx" else (self.dut, self.emitter)
+        )
         self.preflight(sub.required_commands)
         self.reset()
-        sub.prepare(self.emitter.cli, self.dut.cli, fixture)
+        sub.prepare(sender.cli, receiver.cli, fixture)
         start = time.monotonic()
         try:
-            ex = sub.exchange(self.emitter.cli, self.dut.cli, fixture)
+            ex = sub.exchange(sender.cli, receiver.cli, fixture)
         finally:
-            sub.cleanup(self.emitter.cli, self.dut.cli)
+            sub.cleanup(sender.cli, receiver.cli)
+        duration = time.monotonic() - start
         decodes, raw = ex.decodes, ex.dut_output
-        passed = any(d.matches(fixture.expected) for d in decodes)
+        if fixture.expected is None:
+            passed = not decodes
+        else:
+            passed = any(d.matches(fixture.expected) for d in decodes)
+        over = fixture.max_duration_s is not None and duration > fixture.max_duration_s
+        notes = list(ex.notes)
+        if over:
+            notes.append(f"decode correct but took {duration:.2f}s > {fixture.max_duration_s}s")
+            passed = False
         result = RoundTripResult(
             fixture_id=fixture.id,
             passed=passed,
             expected=fixture.expected,
             decodes=decodes,
             dut_output=raw,
-            duration_s=time.monotonic() - start,
+            duration_s=duration,
             emitter_fw=self.emitter.firmware,
             dut_fw=self.dut.firmware,
-            notes=ex.notes,
+            direction=direction,
+            expect_no_decode=fixture.expect_no_decode,
+            over_budget=over,
+            max_duration_s=fixture.max_duration_s,
+            notes=notes,
             battery={
                 "emitter": self.emitter.battery_percent(),
                 "dut": self.dut.battery_percent(),

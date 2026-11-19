@@ -16,12 +16,14 @@ from flci.rig import Rig
 from flci.schema import Fixture
 
 
-@pytest.mark.parametrize("fixture", fixture_params("badusb"))
-def test_badusb_round_trip(rig: Rig, fixture: Fixture, record_property: object) -> None:
+@pytest.mark.parametrize("fixture,direction", fixture_params("badusb"))
+def test_badusb_round_trip(
+    rig: Rig, fixture: Fixture, direction: str, record_property: object
+) -> None:
     if os.environ.get("FLCI_OPERATOR") != "1":
         pytest.skip("BadUSB needs a human to press OK/Back on the DUT: set FLCI_OPERATOR=1")
     try:
         _evdev()
     except HidCaptureUnavailable as e:
         pytest.skip(f"BadUSB host capture unavailable: {e}")
-    run_round_trip(rig, fixture, record_property)
+    run_round_trip(rig, fixture, direction, record_property)

@@ -1,4 +1,5 @@
-"""NFC 13.56 MHz (PARTIAL): emitter emulates an uploaded ``.nfc``; DUT runs ``mfu info``.
+"""NFC 13.56 MHz (PARTIAL): the sender emulates an uploaded ``.nfc``; the receiver
+runs ``mfu info``.
 
 Scope: MIFARE Ultralight / NTAG only, asserting tag type + UID. Other protocols need
 different reader commands and emulation support is uneven; see docs/ROADMAP.md.
@@ -18,23 +19,24 @@ def remote_path(fixture: Fixture) -> str:
 class Nfc(EmitterFirst):
     name = "nfc"
     required_commands = ("nfc", "storage")
-    kinds = ("emulate_file",)
+    kinds = ("emulate_file", "silence")
 
-    def prepare(self, emitter: FlipperCLI, dut: FlipperCLI, fixture: Fixture) -> None:
-        self.kind(fixture)
+    def prepare(self, sender: FlipperCLI, receiver: FlipperCLI, fixture: Fixture) -> None:
+        if self.is_silence(fixture):
+            return
         if fixture.stimulus_path is None:
             raise ValueError(f"{fixture.id}: NFC fixtures need stimulus_path (.nfc file)")
-        emitter.storage_upload(fixture.stimulus_path.read_bytes(), remote_path(fixture))
+        sender.storage_upload(fixture.stimulus_path.read_bytes(), remote_path(fixture))
 
-    def start_emit(self, emitter: FlipperCLI, fixture: Fixture) -> None:
-        emitter.nfc_emulate_start(remote_path(fixture))
+    def start_emit(self, sender: FlipperCLI, fixture: Fixture) -> None:
+        sender.nfc_emulate_start(remote_path(fixture))
 
-    def read(self, dut: FlipperCLI, fixture: Fixture) -> tuple[list[NormalizedDecode], str]:
-        return dut.nfc_mfu_info(timeout_s=as_int(fixture.stimulus.get("read_timeout_s", 10)))
+    def read(self, receiver: FlipperCLI, fixture: Fixture) -> tuple[list[NormalizedDecode], str]:
+        return receiver.nfc_mfu_info(timeout_s=as_int(fixture.stimulus.get("read_timeout_s", 10)))
 
-    def stop_emit(self, emitter: FlipperCLI) -> None:
-        emitter.nfc_emulate_stop()
+    def stop_emit(self, sender: FlipperCLI) -> None:
+        sender.nfc_emulate_stop()
 
-    def cleanup(self, emitter: FlipperCLI, dut: FlipperCLI) -> None:
-        emitter.nfc_exit()
-        dut.nfc_exit()
+    def cleanup(self, sender: FlipperCLI, receiver: FlipperCLI) -> None:
+        sender.nfc_exit()
+        receiver.nfc_exit()

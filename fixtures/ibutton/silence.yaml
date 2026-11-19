@@ -1,0 +1,6 @@
+id: ibutton_silence
+subsystem: ibutton
+description: NEGATIVE. `ikey read` with nothing on the 1-Wire line must time out with no key.
+stimulus: { kind: silence, read_timeout_s: 4 }
+expect_no_decode: true
+tags: [negative, regression, wired]

@@ -9,6 +9,8 @@ from flci.rig import Rig
 from flci.schema import Fixture
 
 
-@pytest.mark.parametrize("fixture", fixture_params("nfc"))
-def test_nfc_round_trip(rig: Rig, fixture: Fixture, record_property: object) -> None:
-    run_round_trip(rig, fixture, record_property)
+@pytest.mark.parametrize("fixture,direction", fixture_params("nfc"))
+def test_nfc_round_trip(
+    rig: Rig, fixture: Fixture, direction: str, record_property: object
+) -> None:
+    run_round_trip(rig, fixture, direction, record_property)

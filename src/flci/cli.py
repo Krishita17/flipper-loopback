@@ -31,6 +31,8 @@ Verified against flipperdevices/flipperzero-firmware ``dev`` (Sept 2026). Source
   (applications/system/updater/cli/updater_cli.c)
 - ``help`` -> ``Available commands:`` then names in ``%-30s`` columns
   (lib/toolbox/cli/shell/cli_shell.c)
+- ``storage info /ext`` -> ``...KiB total``/``...KiB free``, or ``Storage error: ...``
+  without an SD card (applications/services/storage/storage_cli.c)
 - ``info power`` -> ``charge.level``, ``battery.voltage``, ... key/value lines
   (applications/services/cli/cli_main_commands.c, targets/f7/furi_hal/furi_hal_power.c)
 """
@@ -221,6 +223,12 @@ class FlipperCLI:
     def commands(self) -> set[str]:
         """Top-level CLI commands this firmware exposes (for preflight checks)."""
         return parse_help(self.t.run("help", timeout_s=5.0))
+
+    def sd_free_kib(self) -> int | None:
+        """Free SD space in KiB, or None when there is no (working) SD card."""
+        out = self.t.run("storage info /ext", timeout_s=5.0)
+        m = re.search(r"(\d+)KiB free", out)
+        return int(m.group(1)) if m and "Storage error" not in out else None
 
     def power_info(self) -> dict[str, str]:
         """Battery state; low charge measurably shortens RF/RFID range, so we record it."""

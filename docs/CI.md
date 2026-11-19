@@ -67,6 +67,10 @@ Every run that isn't on `main` downloads the `hil-junit` artifact from the lates
 
 *Actions → HIL → Run workflow* with `soak_runs: 20` also repeats every fixture 20 times after the normal suite. The pass-rate table (and the RFC evidence rows) appear in the job summary and in `reports/soak.{json,md}`.
 
+## Directions and bench health
+
+Runs cover both directions by default (`dut_rx`: candidate firmware receives; `dut_tx`: it transmits and the known-good emitter decodes). A manual run can narrow this with the `directions` input. Every run starts with `flci doctor`, which fails the job early, with the reason, if a port, role, SD card or CLI command is wrong.
+
 ## Results
 
-JUnit XML is published as a **HIL results** check run with a per-fixture summary, plus a Markdown job summary from `flci report`. Each test case records the DUT/emitter firmware versions and the decodes the DUT saw (`record_property`), and the raw XML is uploaded as an artifact.
+JUnit XML is published as a **HIL results** check run with a per-fixture summary, plus a Markdown job summary from `flci report` and a self-contained `hil-report.html` (and `soak-report.html` for soak runs) in the uploaded artifact. Each test case records the DUT/emitter firmware versions and the decodes the DUT saw (`record_property`), and the raw XML is uploaded as an artifact.

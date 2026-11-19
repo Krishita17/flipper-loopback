@@ -1,8 +1,9 @@
 """``flci``: command-line entry point for the flipper-loopback harness.
 
 flci detect                          list Flippers, firmware, roles
+flci doctor [--probe]                check the bench is ready, say what to fix
 flci soak --runs 20 [--subsystem X]  repeat fixtures, measure flakiness
-flci report reports/hil-junit.xml    Markdown summary of a pytest JUnit run
+flci report reports/hil-junit.xml    Markdown summary of a run (--html for a shareable page)
 flci compare base.xml cand.xml       regressions between two runs (exit 1 if any)
 flci record ...                      make a fixture from a file or live capture
 flci flash PACKAGE                   flash the DUT from an update package
@@ -30,19 +31,32 @@ def _soak(argv: list[str]) -> int:
     p.add_argument("--runs", type=int, default=20)
     p.add_argument("--subsystem", action="append", choices=sorted(REGISTRY))
     p.add_argument("--tag", action="append", help="only fixtures with this tag")
+    p.add_argument(
+        "--direction",
+        action="append",
+        choices=["dut_rx", "dut_tx"],
+        help="default: both (DUT receive and DUT transmit paths)",
+    )
     p.add_argument("--json", type=Path, default=Path("reports/soak.json"))
     p.add_argument("--markdown", type=Path, default=Path("reports/soak.md"))
     a = p.parse_args(argv)
 
     caps = os.environ.get("FLCI_CAPABILITIES", "subghz,infrared,rfid,nfc").split(",")
     subs = a.subsystem or [s for s in sorted(REGISTRY) if s in caps and s != "badusb"]
-    fixtures = [f for s in subs for f in load_fixtures(s, tags=set(a.tag) if a.tag else None)]
+    exclude = set() if a.tag and "environment" in a.tag else {"environment"}
+    fixtures = [
+        f
+        for s in subs
+        for f in load_fixtures(s, tags=set(a.tag) if a.tag else None)
+        if not exclude & set(f.tags)
+    ]
     emt_port, dut_port = resolve_roles()
     emitter, dut = Device(DeviceRole.EMITTER, emt_port), Device(DeviceRole.DUT, dut_port)
     emitter.open()
     dut.open()
     try:
-        report = run_soak(Rig(emitter, dut), fixtures, a.runs)
+        dirs = a.direction or ["dut_rx", "dut_tx"]
+        report = run_soak(Rig(emitter, dut), fixtures, a.runs, directions=dirs)
     finally:
         emitter.close()
         dut.close()
@@ -62,14 +76,22 @@ def _report(argv: list[str]) -> int:
     p.add_argument("junit", type=Path, nargs="?")
     p.add_argument("--soak", type=Path, help="render a soak JSON instead")
     p.add_argument("--title", default="HIL results")
+    p.add_argument("--html", type=Path, help="also write a self-contained HTML report here")
     a = p.parse_args(argv)
+    from flci.html_report import junit_html, soak_html
+
     if a.soak:
         r = SoakReport.from_json(a.soak.read_text())
         print(r.markdown() + "\n\n" + r.evidence_table())
+        if a.html:
+            a.html.write_text(soak_html(r, "Soak report"))
         return 0
     if not a.junit:
         p.error("give a JUnit XML path or --soak")
-    print(summary_markdown(parse_junit(a.junit), a.title))
+    results = parse_junit(a.junit)
+    print(summary_markdown(results, a.title))
+    if a.html:
+        a.html.write_text(junit_html(results, a.title))
     return 0
 
 
@@ -98,7 +120,7 @@ def _fixtures(argv: list[str]) -> int:
         for f in load_fixtures(s):
             REGISTRY[s]().kind(f)
             total += 1
-            print(f"{s:9} {f.id:32} {f.expected.short():48} [{', '.join(f.tags)}]")
+            print(f"{s:9} {f.id:32} {f.describe_expectation():48} [{', '.join(f.tags)}]")
     print(f"{total} fixtures OK")
     return 0
 
@@ -107,6 +129,7 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     commands = {
         "detect": lambda rest: __import__("flci.tools.detect", fromlist=["main"]).main(rest),
+        "doctor": lambda rest: __import__("flci.tools.doctor", fromlist=["main"]).main(rest),
         "record": lambda rest: __import__("flci.tools.record", fromlist=["main"]).main(rest) or 0,
         "flash": lambda rest: __import__("flci.tools.flash", fromlist=["main"]).main(rest) or 0,
         "soak": _soak,

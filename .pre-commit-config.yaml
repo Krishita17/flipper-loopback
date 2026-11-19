@@ -1,0 +1,19 @@
+# pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+  - repo: local
+    hooks:
+      - id: flci-fixtures
+        name: validate fixtures
+        entry: flci fixtures
+        language: system
+        files: ^fixtures/
+        pass_filenames: false

@@ -28,7 +28,7 @@ def load_fixture(path: Path) -> Fixture:
         fx = Fixture.model_validate({**data, "source": path})
     except ValidationError as e:
         raise FixtureError(f"{path}: {e}") from e
-    if fx.expected.subsystem != fx.subsystem:
+    if fx.expected is not None and fx.expected.subsystem != fx.subsystem:
         raise FixtureError(
             f"{path}: subsystem {fx.subsystem!r} != expected.subsystem {fx.expected.subsystem!r}"
         )

@@ -12,6 +12,7 @@ Those integration cases are run by hand today. Radio, IR, NFC and RFID behavior 
 
 ## Proposal
 - **Two-device loopback, stock DUT.** The DUT is driven only through the existing USB serial CLI. It needs no special build and no extra firmware code.
+- **Both paths.** Each case runs with the candidate firmware receiving *and* transmitting/emulating, against a known-good counterpart. Negative "silence" cases check that nothing is decoded when nothing is sent.
 - **Fixtures as data.** Each case is a YAML file of the expected normalized decode, sometimes with a stimulus file (`.sub`, `.nfc`). Adding a case needs no code.
 - **Every CLI dependency lives in one module**, with a source reference for each command. This also gives maintainers a list of which CLI output formats the community relies on.
 - **CI.** A self-hosted bench runner shows JUnit results as a PR check. It can flash the DUT from a build's update package using `update install` (no DFU/SWD), and firmware forks can call it as a reusable workflow.
